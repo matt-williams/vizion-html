@@ -1,0 +1,11 @@
+#!/bin/bash
+DIRS=$(for FILE in $* ; do if [ -f $FILE ] ; then echo $(dirname $FILE) ; fi ; done | sort | uniq)
+for DIR in $DIRS ; do
+  rm -f $DIR.js
+  for FILE in $DIR/* ; do
+echo linkedin-dustjs-caca4e5/bin/dustc -n=$(basename $FILE | sed -e 's/\..*$//g') $FILE /tmp/compile-dust-templates.js.$$
+    linkedin-dustjs-caca4e5/bin/dustc -n=$(basename $FILE | sed -e 's/\..*$//g') $FILE /tmp/compile-dust-templates.js.$$
+    cat /tmp/compile-dust-templates.js.$$ >> $DIR.js
+  done
+  rm -f /tmp/compile-dust-templates.js.$$
+done
