@@ -158,7 +158,7 @@ void main() {
   codeMirror = CodeMirror.fromTextArea(document.getElementById("fragmentShader"), {mode: "x-shader/x-fragment", lineNumbers: true, matchBrackets: true, onChange: paceFunction(updateShaders, 500)});
   updateShaders();
 
-
+  // Load files
   var fileSelector = document.getElementById("fileSelector");
   var loadShaderButton = document.getElementById("loadShaderButton");
   fileSelector.addEventListener('change', function() {
@@ -176,6 +176,8 @@ void main() {
 
 
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.disable(gl.DEPTH_TEST);
+  gl.depthMask(false);
 
   // Create a buffer and put a single clipspace rectangle in
   // it (2 triangles)
@@ -184,6 +186,19 @@ void main() {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]), gl.STATIC_DRAW);
 
   var texture = gl.createTexture();
+
+  var framebuffer = gl.createFramebuffer();
+  var tex2 = gl.createTexture();
+  framebuffer.width = 256;
+  framebuffer.height = 256;
+  gl.bindTexture(gl.TEXTURE_2D, tex2);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, framebuffer.width, framebuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex2, 0);
 
   function render() {
     //		gl.clear(gl.COLOR_BUFFER_BIT);
@@ -209,6 +224,15 @@ void main() {
       }
     }
 
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.viewport(0, 0, framebuffer.width, framebuffer.height);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    gl.bindTexture(gl.TEXTURE_2D, tex2);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     // request render to be called for the next frame.
