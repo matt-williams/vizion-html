@@ -65,7 +65,10 @@ varying highp vec2 uv;
 uniform sampler2D t;
 uniform highp vec2 duv;
 
-void main() {
+void prog1() {
+  gl_FragColor = texture2D(t, uv);
+}
+void prog2() {
   gl_FragColor = texture2D(t, uv);
 }
           </textarea>
@@ -88,9 +91,14 @@ void main() {
   <script type="text/javascript">
   
   var vizion = new Vizion();
-  var video = vizion.addVideoElement("videoContainer", 320, 240);
 
-  var canvas = vizion.addCanvasElement("canvasContainer", 320, 240);
+  var video = vizion.addVideoElement("videoContainer", 320, 240);
+  vizion.getVideoURL(function(url) {
+    video.src = url;
+  }, Vizion.logError);
+//  video.style.display = "none";
+
+  var canvas = vizion.addCanvasElement("canvasContainer", 640, 480);
   
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
@@ -103,23 +111,27 @@ void main() {
                             "  gl_Position = vec4(xy, 0, 1);\n" +
                             "  uv = 0.5 * (xy + 1.0);\n" +
                             "}\n");
-  var fs = new FragmentShader(gl);
-  var prog = new Program(gl, vs, fs);
-  
-  var loaded = false;
-  vizion.getVideoURL(function(url) {
-    console.log("Got url " + url);
-    video.src = url;
-    loaded = true;
-  }, Vizion.logError);
+  var idFs = new FragmentShader(gl,
+                                "varying highp vec2 uv;\n" +
+                                "uniform sampler2D t;\n" +
+                                "uniform highp vec2 duv;\n" +
+                                "\n" +
+                                "void main() {\n" +
+                                "  gl_FragColor = texture2D(t, uv);\n" +
+                                "}\n");
+  var idProg = new Program(gl, vs, idFs);
+  var fs1 = new FragmentShader(gl);
+  var prog1 = new Program(gl, vs, fs1);
+  var fs2 = new FragmentShader(gl);
+  var prog2 = new Program(gl, vs, fs2);
 
   // setup GLSL program
   var codeMirror;
   function updateShaders() {
     var rowToLogs = {};
     try {
-      fs.setText(codeMirror.getValue());
-      prog.use();
+      fs1.setText(codeMirror.getValue() + "void main() {prog1();}");
+      fs2.setText(codeMirror.getValue() + "void main() {prog2();}");
     } catch (e) {
       if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
         for ( var logIndex = 0; logIndex < e.logs.length; logIndex++) {
@@ -174,66 +186,47 @@ void main() {
     reader.readAsText(file);
   }
 
-
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.disable(gl.DEPTH_TEST);
   gl.depthMask(false);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-  // Create a buffer and put a single clipspace rectangle in
-  // it (2 triangles)
+  // Create a buffer and put a single clipspace rectangle in it (2 triangles)
   var buffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]), gl.STATIC_DRAW);
 
-  var texture = gl.createTexture();
+  var texture = new VideoTexture(gl, video);
+  var renderTexture = new RenderTexture(gl, 320, 240);
+  var renderTexture2 = new RenderTexture(gl, 320, 240);
 
-  var framebuffer = gl.createFramebuffer();
-  var tex2 = gl.createTexture();
-  framebuffer.width = 256;
-  framebuffer.height = 256;
-  gl.bindTexture(gl.TEXTURE_2D, tex2);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, framebuffer.width, framebuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex2, 0);
+  function process(src, dst, prog, x, y) {
+    prog.use();
+    var positionLocation = gl.getAttribLocation(prog.id, "xy");
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(positionLocation);
+    gl.uniform1i(gl.getUniformLocation(prog.id, "t"), 0);
+    gl.uniform2f(gl.getUniformLocation(prog.id, "duv"), 1.0 / dst.width, 1.0 / dst.height);
+    src.use();
+    dst.renderTo();
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    idProg.use();
+    var positionLocation = gl.getAttribLocation(idProg.id, "xy");
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(positionLocation);
+    gl.uniform1i(gl.getUniformLocation(idProg.id, "t"), 0);
+    dst.use();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(x, canvas.height - y - dst.height, dst.width, dst.height);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
 
   function render() {
-    //		gl.clear(gl.COLOR_BUFFER_BIT);
+    texture.update();
 
-    var positionLocation = gl.getAttribLocation(prog.id, "xy");
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform1i(gl.getUniformLocation(prog.id, "t"), 0);
-    gl.uniform2f(gl.getUniformLocation(prog.id, "duv"), 1.0 / 320, 1.0 / 240);
-
-    if (loaded) {
-      try {
-        gl.activeTexture(gl.TEXTURE0);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      } catch (e) {
-        console.log(e);
-      }
-    }
-
-
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.viewport(0, 0, framebuffer.width, framebuffer.height);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.bindTexture(gl.TEXTURE_2D, tex2);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    process(texture, renderTexture, prog1, 0, 0);
+    process(renderTexture, renderTexture2, prog2, 320, 0);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);

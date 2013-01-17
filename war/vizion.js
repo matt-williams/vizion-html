@@ -172,7 +172,7 @@ Program.prototype.update = function() {
       console.log(this.gl.getProgramInfoLog(this.id));
     }
 
-    var numUniforms = gl.getProgramParameter(prog.id, gl.ACTIVE_UNIFORMS);
+    var numUniforms = gl.getProgramParameter(this.id, gl.ACTIVE_UNIFORMS);
     this.uniforms = [];
     for (var uniformIndex = 0; uniformIndex < numUniforms; uniformIndex++) {
       var uniform = gl.getActiveUniform(this.id, uniformIndex);
@@ -189,7 +189,7 @@ Program.prototype.update = function() {
 
     }
 
-    var numAttribs = gl.getProgramParameter(prog.id, gl.ACTIVE_ATTRIBUTES);
+    var numAttribs = gl.getProgramParameter(this.id, gl.ACTIVE_ATTRIBUTES);
     this.attributes = [];
     for (var attribIndex = 0; attribIndex < numAttribs; attribIndex++) {
       var attrib = gl.getActiveAttrib(this.id, attribIndex);
@@ -210,13 +210,53 @@ Program.prototype.use = function() {
   this.gl.useProgram(this.id);
 }
 
-
-function Texture(gl, source) {
-  this.gl = gl;
-  this.id = gl.createTexture();
-  this.setSource(source);
+function Texture(gl) {
+  if (gl) {
+    this.gl = gl;
+    this.id = gl.createTexture();
+    this.use();
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  }
 }
 
-Texture.prototype.setSource = function(source) {
+Texture.prototype.use = function(channel) {
+  channel = (channel) ? channel : gl.TEXTURE0;
+  gl.activeTexture(channel);
+  this.gl.bindTexture(gl.TEXTURE_2D, this.id);
 }
 
+function VideoTexture(gl, video) {
+  Texture.call(this, gl);
+  this.video = video;
+}
+
+VideoTexture.prototype = new Texture();
+
+VideoTexture.prototype.update = function() {
+  if (video.readyState == 4) {
+    this.gl.bindTexture(gl.TEXTURE_2D, this.id);
+    this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+  }
+}
+
+function RenderTexture(gl, width, height) {
+  Texture.call(this, gl);
+  this.width = width;
+  this.height = height;
+  this.use();
+  this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  this.fbId = gl.createFramebuffer();
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbId);
+  this.gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.id, 0);
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+RenderTexture.prototype = new Texture();
+
+RenderTexture.prototype.renderTo = function() {
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbId);
+  this.gl.viewport(0, 0, this.width, this.height);
+}
