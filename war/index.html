@@ -75,8 +75,7 @@ void prog2() {
         </div>
       </div>
       <div class="row">
-        <div id="videoContainer" class="span4" style="text-align: center;"></div>
-        <div id="canvasContainer" class="span4" style="text-align: center;"></div>
+        <div id="canvasContainer" class="span12" style="text-align: center;"></div>
       </div>
     </div>
   </body>
@@ -92,13 +91,12 @@ void prog2() {
   
   var vizion = new Vizion();
 
-  var video = vizion.addVideoElement("videoContainer", 320, 240);
+  var video = vizion.createVideoElement(320, 240);
   vizion.getVideoURL(function(url) {
     video.src = url;
   }, Vizion.logError);
-//  video.style.display = "none";
 
-  var canvas = vizion.addCanvasElement("canvasContainer", 640, 480);
+  var canvas = vizion.addCanvasElement("canvasContainer", 1280, 480);
   
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
@@ -192,41 +190,42 @@ void prog2() {
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
   // Create a buffer and put a single clipspace rectangle in it (2 triangles)
-  var buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]), gl.STATIC_DRAW);
+  var vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
 
   var texture = new VideoTexture(gl, video);
   var renderTexture = new RenderTexture(gl, 320, 240);
   var renderTexture2 = new RenderTexture(gl, 320, 240);
 
+  function display(tex, x, y, width, height) {
+    width = (width) ? width : tex.width;
+    height = (height) ? height : tex.height;
+    idProg.use();
+    idProg.attributes.xy = vertices;
+    idProg.uniforms.t = 0;
+    tex.use();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(x, canvas.height - y - height, width, height);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
   function process(src, dst, prog, x, y) {
     prog.use();
-    var positionLocation = gl.getAttribLocation(prog.id, "xy");
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(positionLocation);
-    gl.uniform1i(gl.getUniformLocation(prog.id, "t"), 0);
-    gl.uniform2f(gl.getUniformLocation(prog.id, "duv"), 1.0 / dst.width, 1.0 / dst.height);
+    prog.attributes.xy = vertices;
+    prog.uniforms.t = 0;
+    prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
     src.use();
     dst.renderTo();
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    idProg.use();
-    var positionLocation = gl.getAttribLocation(idProg.id, "xy");
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(positionLocation);
-    gl.uniform1i(gl.getUniformLocation(idProg.id, "t"), 0);
-    dst.use();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(x, canvas.height - y - dst.height, dst.width, dst.height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
   function render() {
     texture.update();
 
-    process(texture, renderTexture, prog1, 0, 0);
-    process(renderTexture, renderTexture2, prog2, 320, 0);
+    process(texture, renderTexture, prog1);
+    process(renderTexture, renderTexture2, prog2);
+    display(texture, 0, 0);
+    display(renderTexture, 320, 0);
+    display(renderTexture2, 640, 0);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);

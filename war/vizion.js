@@ -18,13 +18,16 @@ Vizion.logError = function(error) {
 Vizion.prototype.cameraSupported = function() {
 	return this.getUserMedia ? true : false;
 };
-Vizion.prototype.addVideoElement = function(parent, width, height) {
-        var parent = (parent instanceof Element) ? parent : document.getElementById(parent);
-	var video = document.createElement('video');
+Vizion.prototype.createVideoElement = function(width, height) {
+        var video = document.createElement('video');
 	video.width = width;
 	video.height = height;
 	video.autoplay = true;
-	parent.appendChild(video);
+	return video;
+}
+Vizion.prototype.addVideoElement = function(parent, width, height) {
+        var parent = (parent instanceof Element) ? parent : document.getElementById(parent);
+        parent.appendChild(this.createVideoElement(width, height));
 	return video;
 }
 Vizion.prototype.addCanvasElement = function(parent, width, height) {
@@ -151,6 +154,10 @@ function Program(gl, vertexShader, fragmentShader) {
 }
 
 Program.prototype.update = function() {
+  this.uniforms = {};
+  this.uniformDescriptors = {};
+  this.attributes = {};
+  this.attributeDescriptors = {};
   if ((this.vertexShader.id != null) &&
       (this.fragmentShader.id != null)) {
     if (this.attachedVertexShaderId != this.vertexShader.id) {
@@ -172,47 +179,120 @@ Program.prototype.update = function() {
       console.log(this.gl.getProgramInfoLog(this.id));
     }
 
+    function defineUniformProperty(program, name) {
+      Object.defineProperty(program.uniforms, name, {get: function() {return program.getUniform(name);},
+                                                     set: function(value) {return program.setUniform(name, value);}}); 
+    }
+
+    function defineAttributeProperty(program, name) {
+      Object.defineProperty(program.attributes, name, {get: function() {return program.getAttribute(name);},
+                                                       set: function(value) {return program.setAttribute(name, value);}}); 
+    }
+
     var numUniforms = gl.getProgramParameter(this.id, gl.ACTIVE_UNIFORMS);
-    this.uniforms = [];
+    this.uniformDescriptors = [];
     for (var uniformIndex = 0; uniformIndex < numUniforms; uniformIndex++) {
       var uniform = gl.getActiveUniform(this.id, uniformIndex);
-      this.uniforms.push({name: uniform.name.replace(/\[[0-9]+\]$/, ""),
-                          type: glIdToString(gl, uniform.type),
-                          size: uniform.size,
-                          location: gl.getUniformLocation(this.id, uniform.name)});
-                     
-// BOOL, INT, FLOAT, BYTE?, SHORT?
-// _VEC2, _VEC3, _V£C4
-// FLOAT_MAT2, FLOAT_MAT3, FLOAT_MAT4
-// HIGH_FLOAT, HIGH_INT?, LOW_INT?, LOW_FLOAT?, MEDIUM_FLOAT?, MEDIUM_INT?
-// UNSIGNED_BYTE, UNSIGNED_INT, UNSIGNED_SHORT, UNSIGNED_SHORT_4_4_4_4, UNSIGNED_SHORT_5_5_5_1, UNSIGNED_SHORT_5_6_%?
-
+      var uniformName = uniform.name.replace(/\[[0-9]+\]$/, "");
+      this.uniformDescriptors[uniformName] = {type: glIdToString(gl, uniform.type),
+                                              size: uniform.size,
+                                              location: gl.getUniformLocation(this.id, uniform.name)};
+      defineUniformProperty(this, uniformName);
     }
 
     var numAttribs = gl.getProgramParameter(this.id, gl.ACTIVE_ATTRIBUTES);
-    this.attributes = [];
+    this.attributeDescriptors = [];
     for (var attribIndex = 0; attribIndex < numAttribs; attribIndex++) {
       var attrib = gl.getActiveAttrib(this.id, attribIndex);
-      this.attributes.push({name: attrib.name.replace(/\[[0-9]+\]$/, ""),
-                            type: glIdToString(gl, attrib.type),
-                            size: attrib.size,
-                            location: gl.getAttribLocation(this.id, attrib.name)});
+      var attribName = attrib.name.replace(/\[[0-9]+\]$/, "");
+      this.attributeDescriptors[attribName] = {type: glIdToString(gl, attrib.type),
+                                               size: attrib.size,
+                                               location: gl.getAttribLocation(this.id, attrib.name)};
+      defineAttributeProperty(this, attribName);
     }
   }
 }
 
-Program.prototype.getUniformValue = function(uniform) {
-console.log(this, uniform);
-  return this.gl.getUniform(this.id, uniform.location)
+Program.prototype.getUniform = function(uniform) {
+  return (this.uniformDescriptors[uniform]) ? this.gl.getUniform(this.id, this.uniformDescriptors[uniform].location) : undefined;
+}
+
+Program.prototype.setUniform = function(uniform, value) {
+  if (this.uniformDescriptors[uniform]) {
+    var location = this.uniformDescriptors[uniform].location;
+    switch (this.uniformDescriptors[uniform].type) {
+      case "BOOL":
+      case "INT":
+        this.gl.setUniform1i(location, value);
+        break;
+      case "FLOAT":
+        this.gl.setUniform1f(location, value);
+        break;
+      case "BOOL_VEC2":
+      case "INT_VEC2":
+        this.gl.setUniform2i(location, value);
+        break;
+      case "FLOAT_VEC2":
+        this.gl.setUniform2f(location, value);
+        break;
+      case "BOOL_VEC3":
+      case "INT_VEC3":
+        this.gl.setUniform3i(location, value);
+        break;
+      case "FLOAT_VEC3":
+        this.gl.setUniform3f(location, value);
+        break;
+      case "BOOL_VEC4":
+      case "INT_VEC4":
+        this.gl.setUniform4i(location, value);
+        break;
+      case "FLOAT_VEC4":
+        this.gl.setUniform4f(location, value);
+        break;
+      case "FLOAT_MAT2":
+        this.gl.uniformMatrix2fv(location, false, (value instanceof Float32Array) ? value : new Float32Array(value));
+        break;
+      case "FLOAT_MAT3":
+        this.gl.uniformMatrix3fv(location, false, (value instanceof Float32Array) ? value : new Float32Array(value));
+        break;
+      case "FLOAT_MAT4":
+        this.gl.uniformMatrix4fv(location, false, (value instanceof Float32Array) ? value : new Float32Array(value));
+        break;
+    }
+  }
+}
+
+Program.prototype.getAttribute = function(attribute) {
+  return (this.attributeDescriptors[attribute]) ? this.gl.getVertexAttrib(this.attributeDescriptors[attribute].location, gl.CURRENT_VERTEX_ATTRIB) : undefined;
+}
+
+Program.prototype.setAttribute = function(attribute, value) {
+  if (this.attributeDescriptors[attribute]) {
+    var location = this.attributeDescriptors[attribute].location;
+    if (value) {
+      value = (value instanceof Float32Array) ? value : new Float32Array(value);
+      var buffer = this.attributeDescriptors[attribute].buffer;
+      buffer = (buffer) ? buffer : gl.createBuffer();
+      this.attributeDescriptors[attribute].buffer = buffer;
+      this.gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      this.gl.bufferData(gl.ARRAY_BUFFER, value, gl.STATIC_DRAW);
+      this.gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0); 
+      this.gl.enableVertexAttribArray(location);
+    } else {
+      this.gl.disableVertexAttribArray(location);
+    }
+  }
 }
 
 Program.prototype.use = function() {
   this.gl.useProgram(this.id);
 }
 
-function Texture(gl) {
+function Texture(gl, width, height) {
   if (gl) {
     this.gl = gl;
+    this.width = width;
+    this.height = height;
     this.id = gl.createTexture();
     this.use();
     this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -229,7 +309,7 @@ Texture.prototype.use = function(channel) {
 }
 
 function VideoTexture(gl, video) {
-  Texture.call(this, gl);
+  Texture.call(this, gl, video.width, video.height);
   this.video = video;
 }
 
@@ -243,9 +323,7 @@ VideoTexture.prototype.update = function() {
 }
 
 function RenderTexture(gl, width, height) {
-  Texture.call(this, gl);
-  this.width = width;
-  this.height = height;
+  Texture.call(this, gl, width, height);
   this.use();
   this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   this.fbId = gl.createFramebuffer();
