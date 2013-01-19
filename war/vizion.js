@@ -141,8 +141,6 @@ function Program(gl, vertexShader, fragmentShader) {
   this.gl = gl;
   this.vertexShader = (vertexShader instanceof Shader) ? vertexShader  : new VertexShader(gl, vertexShader);
   this.fragmentShader = (fragmentShader instanceof Shader) ? fragmentShader : new FragmentShader(gl, fragmentShader);
-    console.log(vertexShader, this.vertexShader);
-    console.log(fragmentShader, this.fragmentShader);
   this.id = gl.createProgram();
   this.attachedVertexShaderId = null;
   this.attachedFragmentShaderId = null;
@@ -233,6 +231,8 @@ Program.prototype.setUniform = function(uniform, value) {
     switch (this.uniformDescriptors[uniform].type) {
       case "BOOL":
       case "INT":
+      case "SAMPLER_2D":
+      case "SAMPLER_CUBE":
         this.gl.uniform1i(location, value);
         break;
       case "FLOAT":

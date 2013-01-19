@@ -75,6 +75,9 @@ void prog2() {
 void prog3() {
   gl_FragColor = texture2D(t, uv);
 }
+void prog4() {
+  gl_FragColor = texture2D(t, uv);
+}
           </textarea>
         </div>
       </div>
@@ -122,21 +125,20 @@ void prog3() {
                                     "void main() {\n" +
                                     "  gl_FragColor = texture2D(t, uv);\n" +
                                     "}\n");
-  var fs1 = new FragmentShader(gl);
-  var prog1 = new Program(gl, vertexShader, fs1);
-  var fs2 = new FragmentShader(gl);
-  var prog2 = new Program(gl, vertexShader, fs2);
-  var fs3 = new FragmentShader(gl);
-  var prog3 = new Program(gl, vertexShader, fs3);
+  var program1 = new Program(gl, vertexShader);
+  var program2 = new Program(gl, vertexShader);
+  var program3 = new Program(gl, vertexShader);
+  var program4 = new Program(gl, vertexShader);
 
   // setup GLSL program
   var codeMirror;
   function updateShaders() {
     var rowToLogs = {};
     try {
-      fs1.setText(codeMirror.getValue(), "prog1");
-      fs2.setText(codeMirror.getValue(), "prog2");
-      fs3.setText(codeMirror.getValue(), "prog3");
+      program1.setFragmentText(codeMirror.getValue(), "prog1");
+      program2.setFragmentText(codeMirror.getValue(), "prog2");
+      program3.setFragmentText(codeMirror.getValue(), "prog3");
+      program4.setFragmentText(codeMirror.getValue(), "prog4");
     } catch (e) {
       if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
         for ( var logIndex = 0; logIndex < e.logs.length; logIndex++) {
@@ -206,9 +208,10 @@ void prog3() {
   var vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
 
   var texture = new VideoTexture(gl, video);
-  var renderTexture = new RenderTexture(gl, 320, 240);
-  var renderTexture2 = new RenderTexture(gl, 320, 240);
-  var renderTexture3 = new RenderTexture(gl, 320, 240);
+  var renderTexture = new RenderTexture(gl, 40, 30);
+  var renderTexture2 = new RenderTexture(gl, 40, 30);
+  var renderTexture3 = new RenderTexture(gl, 40, 30);
+  var renderTexture4 = new RenderTexture(gl, 320, 240);
 
   function display(tex, x, y, width, height) {
     width = (width) ? width : tex.width;
@@ -222,12 +225,18 @@ void prog3() {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  function process(src, dst, prog, x, y) {
+  function process(src, dst, prog) {
     prog.use();
     prog.attributes.xy = vertices;
     prog.uniforms.t = 0;
     prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
-    src.use();
+    if (src instanceof Array) {
+      src[0].use(gl.TEXTURE0);
+      src[1].use(gl.TEXTURE1);
+      prog.uniforms.t2 = 1;
+    } else {
+      src.use();
+    }
     dst.renderTo();
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
@@ -237,13 +246,15 @@ void prog3() {
       texture.update();
     }
 
-    process(texture, renderTexture, prog1);
-    process(renderTexture, renderTexture2, prog2);
-    process(renderTexture2, renderTexture3, prog3);
+    process(texture, renderTexture, program1);
+    process(renderTexture, renderTexture2, program2);
+    process(renderTexture2, renderTexture3, program3);
+    process([texture, renderTexture3], renderTexture4, program4);
     display(texture, 0, 0);
-    display(renderTexture, 320, 0);
-    display(renderTexture2, 640, 0);
-    display(renderTexture3, 960, 0);
+    display(renderTexture, 320, 0, 320, 240);
+    display(renderTexture2, 640, 0, 320, 240);
+    display(renderTexture3, 960, 0, 320, 240);
+    display(renderTexture4, 0, 240, 320, 240);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);
