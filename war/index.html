@@ -60,6 +60,7 @@ body {
         <div class="span12">
           <input type="file" id="fileSelector" name="file"/>
           <button id="loadShaderButton" disabled>Load</button>
+          <button id="pauseButton">Pause/Unpause</button>
           <textarea id="fragmentShader" style="width: 100%; height: 40ex;">
 varying highp vec2 uv;
 uniform sampler2D t;
@@ -69,6 +70,9 @@ void prog1() {
   gl_FragColor = texture2D(t, uv);
 }
 void prog2() {
+  gl_FragColor = texture2D(t, uv);
+}
+void prog3() {
   gl_FragColor = texture2D(t, uv);
 }
           </textarea>
@@ -101,35 +105,38 @@ void prog2() {
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
   
-  var vs = new VertexShader(gl,
-                            "attribute vec2 xy;\n" +
-                            "varying highp vec2 uv;\n" +
-                            "\n" +
-                            "void main() {\n" +
-                            "  gl_Position = vec4(xy, 0, 1);\n" +
-                            "  uv = 0.5 * (xy + 1.0);\n" +
-                            "}\n");
-  var idFs = new FragmentShader(gl,
-                                "varying highp vec2 uv;\n" +
-                                "uniform sampler2D t;\n" +
-                                "uniform highp vec2 duv;\n" +
-                                "\n" +
-                                "void main() {\n" +
-                                "  gl_FragColor = texture2D(t, uv);\n" +
-                                "}\n");
-  var idProg = new Program(gl, vs, idFs);
+  var vertexShader = new VertexShader(gl,
+                                    "attribute vec2 xy;\n" +
+                                    "varying highp vec2 uv;\n" +
+                                    "\n" +
+                                    "void main() {\n" +
+                                    "  gl_Position = vec4(xy, 0, 1);\n" +
+                                    "  uv = 0.5 * (xy + 1.0);\n" +
+                                    "}\n");
+  var identityProgram = new Program(gl,
+                                    vertexShader,
+                                    "varying highp vec2 uv;\n" +
+                                    "uniform sampler2D t;\n" +
+                                    "uniform highp vec2 duv;\n" +
+                                    "\n" +
+                                    "void main() {\n" +
+                                    "  gl_FragColor = texture2D(t, uv);\n" +
+                                    "}\n");
   var fs1 = new FragmentShader(gl);
-  var prog1 = new Program(gl, vs, fs1);
+  var prog1 = new Program(gl, vertexShader, fs1);
   var fs2 = new FragmentShader(gl);
-  var prog2 = new Program(gl, vs, fs2);
+  var prog2 = new Program(gl, vertexShader, fs2);
+  var fs3 = new FragmentShader(gl);
+  var prog3 = new Program(gl, vertexShader, fs3);
 
   // setup GLSL program
   var codeMirror;
   function updateShaders() {
     var rowToLogs = {};
     try {
-      fs1.setText(codeMirror.getValue() + "void main() {prog1();}");
-      fs2.setText(codeMirror.getValue() + "void main() {prog2();}");
+      fs1.setText(codeMirror.getValue(), "prog1");
+      fs2.setText(codeMirror.getValue(), "prog2");
+      fs3.setText(codeMirror.getValue(), "prog3");
     } catch (e) {
       if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
         for ( var logIndex = 0; logIndex < e.logs.length; logIndex++) {
@@ -184,6 +191,12 @@ void prog2() {
     reader.readAsText(file);
   }
 
+  var pauseButton = document.getElementById("pauseButton");
+  var paused = false;
+  pauseButton.onclick = function() {
+    paused = !paused;
+  }
+
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.disable(gl.DEPTH_TEST);
   gl.depthMask(false);
@@ -195,13 +208,14 @@ void prog2() {
   var texture = new VideoTexture(gl, video);
   var renderTexture = new RenderTexture(gl, 320, 240);
   var renderTexture2 = new RenderTexture(gl, 320, 240);
+  var renderTexture3 = new RenderTexture(gl, 320, 240);
 
   function display(tex, x, y, width, height) {
     width = (width) ? width : tex.width;
     height = (height) ? height : tex.height;
-    idProg.use();
-    idProg.attributes.xy = vertices;
-    idProg.uniforms.t = 0;
+    identityProgram.use();
+    identityProgram.attributes.xy = vertices;
+    identityProgram.uniforms.t = 0;
     tex.use();
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(x, canvas.height - y - height, width, height);
@@ -219,13 +233,17 @@ void prog2() {
   }
 
   function render() {
-    texture.update();
+    if (!paused) {
+      texture.update();
+    }
 
     process(texture, renderTexture, prog1);
     process(renderTexture, renderTexture2, prog2);
+    process(renderTexture2, renderTexture3, prog3);
     display(texture, 0, 0);
     display(renderTexture, 320, 0);
     display(renderTexture2, 640, 0);
+    display(renderTexture3, 960, 0);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);

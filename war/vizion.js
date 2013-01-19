@@ -71,18 +71,18 @@ function ShaderCompileException(logs) {
   this.logs = logs;
 }
 
-function Shader(gl, type, text) {
+function Shader(gl, type, text, name) {
   this.gl = gl;
   this.type = type;
   this.listeners = [];
   if (text != null) {
-    this.setText(text);
+      this.setText(text, name);
   }
 }
 
-Shader.prototype.setText = function(text) {
+Shader.prototype.setText = function(text, name) {
   var id = this.gl.createShader(this.type);
-  this.gl.shaderSource(id, text);
+  this.gl.shaderSource(id, text + ((name) ? "void main(){" + name + "();}" : ""));
   this.gl.compileShader(id);
 
   if (!this.gl.getShaderParameter(id, gl.COMPILE_STATUS)) {
@@ -129,18 +129,20 @@ Shader.prototype.notifyListeners = function() {
   }
 }
 
-function VertexShader(gl, text) {
-  return new Shader(gl, gl.VERTEX_SHADER, text);
+function VertexShader(gl, text, name) {
+    return new Shader(gl, gl.VERTEX_SHADER, text, name);
 }
 
-function FragmentShader(gl, text) {
-  return new Shader(gl, gl.FRAGMENT_SHADER, text);
+function FragmentShader(gl, text, name) {
+    return new Shader(gl, gl.FRAGMENT_SHADER, text, name);
 }
 
 function Program(gl, vertexShader, fragmentShader) {
   this.gl = gl;
-  this.vertexShader = vertexShader;
-  this.fragmentShader = fragmentShader;
+  this.vertexShader = (vertexShader instanceof Shader) ? vertexShader  : new VertexShader(gl, vertexShader);
+  this.fragmentShader = (fragmentShader instanceof Shader) ? fragmentShader : new FragmentShader(gl, fragmentShader);
+    console.log(vertexShader, this.vertexShader);
+    console.log(fragmentShader, this.fragmentShader);
   this.id = gl.createProgram();
   this.attachedVertexShaderId = null;
   this.attachedFragmentShaderId = null;
@@ -148,8 +150,8 @@ function Program(gl, vertexShader, fragmentShader) {
   this.shaderListener = function() {
     self.update();
   }
-  vertexShader.addListener(this.shaderListener);
-  fragmentShader.addListener(this.shaderListener);
+  this.vertexShader.addListener(this.shaderListener);
+  this.fragmentShader.addListener(this.shaderListener);
   this.update();
 }
 
@@ -213,6 +215,14 @@ Program.prototype.update = function() {
   }
 }
 
+Program.prototype.setVertexText = function(text, name) {
+  return this.vertexShader.setText(text, name);
+}
+
+Program.prototype.setFragmentText = function(text, name) {
+  return this.fragmentShader.setText(text, name);
+}
+
 Program.prototype.getUniform = function(uniform) {
   return (this.uniformDescriptors[uniform]) ? this.gl.getUniform(this.id, this.uniformDescriptors[uniform].location) : undefined;
 }
@@ -223,31 +233,31 @@ Program.prototype.setUniform = function(uniform, value) {
     switch (this.uniformDescriptors[uniform].type) {
       case "BOOL":
       case "INT":
-        this.gl.setUniform1i(location, value);
+        this.gl.uniform1i(location, value);
         break;
       case "FLOAT":
-        this.gl.setUniform1f(location, value);
+        this.gl.uniform1f(location, value);
         break;
       case "BOOL_VEC2":
       case "INT_VEC2":
-        this.gl.setUniform2i(location, value);
+        this.gl.uniform2i(location, value[0], value[1]);
         break;
       case "FLOAT_VEC2":
-        this.gl.setUniform2f(location, value);
+        this.gl.uniform2f(location, value[0], value[1]);
         break;
       case "BOOL_VEC3":
       case "INT_VEC3":
-        this.gl.setUniform3i(location, value);
+        this.gl.uniform3i(location, value[0], value[1], value[2]);
         break;
       case "FLOAT_VEC3":
-        this.gl.setUniform3f(location, value);
+        this.gl.uniform3f(location, value[0], value[1], value[2]);
         break;
       case "BOOL_VEC4":
       case "INT_VEC4":
-        this.gl.setUniform4i(location, value);
+        this.gl.uniform4i(location, value[0], value[1], value[2], value[3]);
         break;
       case "FLOAT_VEC4":
-        this.gl.setUniform4f(location, value);
+        this.gl.uniform4f(location, value[0], value[1], value[2], value[3]);
         break;
       case "FLOAT_MAT2":
         this.gl.uniformMatrix2fv(location, false, (value instanceof Float32Array) ? value : new Float32Array(value));
