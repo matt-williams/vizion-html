@@ -227,37 +227,38 @@ Program.prototype.getUniform = function(uniform) {
 
 Program.prototype.setUniform = function(uniform, value) {
   if (this.uniformDescriptors[uniform]) {
+    value = (value instanceof Array) ? value : [value];
     var location = this.uniformDescriptors[uniform].location;
     switch (this.uniformDescriptors[uniform].type) {
       case "BOOL":
       case "INT":
       case "SAMPLER_2D":
       case "SAMPLER_CUBE":
-        this.gl.uniform1i(location, value);
+        this.gl.uniform1iv(location, (value instanceof Int32Array) ? value : new Int32Array(value));
         break;
       case "FLOAT":
-        this.gl.uniform1f(location, value);
+        this.gl.uniform1fv(location, (value instanceof Float32Array) ? value : new Float32Array(value));
         break;
       case "BOOL_VEC2":
       case "INT_VEC2":
-        this.gl.uniform2i(location, value[0], value[1]);
+        this.gl.uniform2iv(location, (value instanceof Int32Array) ? value : new Int32Array(value));
         break;
       case "FLOAT_VEC2":
-        this.gl.uniform2f(location, value[0], value[1]);
+        this.gl.uniform2fv(location, (value instanceof Float32Array) ? value : new Float32Array(value));
         break;
       case "BOOL_VEC3":
       case "INT_VEC3":
-        this.gl.uniform3i(location, value[0], value[1], value[2]);
+        this.gl.uniform3iv(location, (value instanceof Int32Array) ? value : new Int32Array(value));
         break;
       case "FLOAT_VEC3":
-        this.gl.uniform3f(location, value[0], value[1], value[2]);
+        this.gl.uniform3fv(location, (value instanceof Float32Array) ? value : new Float32Array(value));
         break;
       case "BOOL_VEC4":
       case "INT_VEC4":
-        this.gl.uniform4i(location, value[0], value[1], value[2], value[3]);
+        this.gl.uniform4iv(location, (value instanceof Int32Array) ? value : new Int32Array(value));
         break;
       case "FLOAT_VEC4":
-        this.gl.uniform4f(location, value[0], value[1], value[2], value[3]);
+        this.gl.uniform4fv(location, (value instanceof Float32Array) ? value : new Float32Array(value));
         break;
       case "FLOAT_MAT2":
         this.gl.uniformMatrix2fv(location, false, (value instanceof Float32Array) ? value : new Float32Array(value));

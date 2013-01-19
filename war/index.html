@@ -63,20 +63,20 @@ body {
           <button id="pauseButton">Pause/Unpause</button>
           <textarea id="fragmentShader" style="width: 100%; height: 40ex;">
 varying highp vec2 uv;
-uniform sampler2D t;
+uniform sampler2D t[1];
 uniform highp vec2 duv;
 
 void prog1() {
-  gl_FragColor = texture2D(t, uv);
+  gl_FragColor = texture2D(t[0], uv);
 }
 void prog2() {
-  gl_FragColor = texture2D(t, uv);
+  gl_FragColor = texture2D(t[0], uv);
 }
 void prog3() {
-  gl_FragColor = texture2D(t, uv);
+  gl_FragColor = texture2D(t[0], uv);
 }
 void prog4() {
-  gl_FragColor = texture2D(t, uv);
+  gl_FragColor = texture2D(t[0], uv);
 }
           </textarea>
         </div>
@@ -225,18 +225,21 @@ void prog4() {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  function process(src, dst, prog) {
+  function process(srcs, dst, prog) {
     prog.use();
     prog.attributes.xy = vertices;
-    prog.uniforms.t = 0;
     prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
-    if (src instanceof Array) {
-      src[0].use(gl.TEXTURE0);
-      src[1].use(gl.TEXTURE1);
-      prog.uniforms.t2 = 1;
-    } else {
-      src.use();
+    srcs = (srcs) ? ((srcs instanceof Array) ? srcs : [srcs]) : [];
+    tSize = (prog.uniformDescriptors.t) ? prog.uniformDescriptors.t.size : 0;
+    t = [];
+    for (srcIndex = 0; srcIndex < ((srcs.length < tSize) ? srcs.length : tSize); srcIndex++) {
+      srcs[srcIndex].use(gl["TEXTURE" + srcIndex]);
+      t.push(srcIndex);
     }
+    for (; srcIndex < tSize; srcIndex++) {
+      t.push(0);
+    }
+    prog.uniforms.t = t;
     dst.renderTo();
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }

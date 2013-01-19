@@ -54,5 +54,5 @@ void prog3() {
   gl_FragColor = gaussian5x1(t, uv, vec2(duv.y));
 }
 void prog4() {
-  gl_FragColor = pix(step(luma(t2, uv), luma(t, uv)));
+  gl_FragColor = pix(1.0 - step(luma(t, uv), luma(t2, uv)));
 }
