@@ -43,6 +43,22 @@ lowp vec4 gaussian5x1(sampler2D t, highp vec2 uv, highp vec2 duv) {
            7.0 / 107.0 * texture2D(t, uv + 2.0 * duv));
 }
 
+lowp float contrast(sampler2D t1, sampler2D t2, highp vec2 uv) {
+  return 1.0 - step(luma(t1, uv), luma(t2, uv));
+}
+
+lowp vec4 despeckle(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  lowp vec4 surround = texture2D(t, uv + vec2(-duv.x, -duv.y)) +
+                       texture2D(t, uv + vec2(0, -duv.y)) +
+                       texture2D(t, uv + vec2(duv.x, -duv.y)) +
+                       texture2D(t, uv + vec2(-duv.x, 0)) +
+                       texture2D(t, uv + vec2(duv.x, 0)) +
+                       texture2D(t, uv + vec2(-duv.x, duv.y)) +
+                       texture2D(t, uv + vec2(0, duv.y)) +
+                       texture2D(t, uv + vec2(duv.x, duv.y));
+  return clamp(texture2D(t, uv), step(5.5, surround), step(2.5, surround));
+}
+
 void prog1() {
   gl_FragColor = pix(luma(texture2D8x8(t[0], uv, duv).rgb));
 }
@@ -53,5 +69,8 @@ void prog3() {
   gl_FragColor = gaussian5x1(t[0], uv, vec2(duv.y));
 }
 void prog4() {
-  gl_FragColor = pix(1.0 - step(luma(t[0], uv), luma(t[1], uv)));
+  gl_FragColor = pix(contrast(t[0], t[1], uv));
+}
+void prog5() {
+  gl_FragColor = despeckle(t[0], uv, duv);
 }
