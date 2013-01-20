@@ -241,11 +241,19 @@ void prog7() {
     srcs = (srcs) ? ((srcs instanceof Array) ? srcs : [srcs]) : [];
     tSize = (prog.uniformDescriptors.t) ? prog.uniformDescriptors.t.size : 0;
     t = [];
-    for (var srcIndex = 0; srcIndex < ((srcs.length < tSize) ? srcs.length : tSize); srcIndex++) {
-      srcs[srcIndex].use(gl["TEXTURE" + srcIndex]);
-      t.push(srcIndex);
+    for (var srcIndex = 0; (srcIndex < srcs.length) && (t.length < tSize); srcIndex++) {
+      var src = srcs[srcIndex];
+      if (src instanceof Texture) {
+        src.use(gl["TEXTURE" + t.length]);
+        t.push(t.length);
+      } else if (src instanceof RenderTextureLOD) {
+        for (var level = 0; (level < src.levels.length) && (t.length < tSize); level++) {
+          src.use(level, gl["TEXTURE" + t.length]);
+          t.push(t.length);
+        }
+      }
     }
-    for (; srcIndex < tSize; srcIndex++) {
+    while (t.length < tSize) {
       t.push(0);
     }
     prog.uniforms.t = t;
@@ -256,13 +264,13 @@ void prog7() {
   function processHierarchy(src, dst, prog) {
     prog.use();
     prog.attributes.xy = vertices;
-    prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
     src.use();
     prog.uniforms.t = 0;
-    prog.uniforms.lod = 0;
+    prog.uniforms.duv = [1.0 / dst.levels[0].width, 1.0 / dst.levels[0].height];
     dst.renderTo(0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     for (var lod = 1; lod < dst.levels.length; lod++) {
+      prog.uniforms.duv = [1.0 / dst.levels[lod].width, 1.0 / dst.levels[lod].height];
       dst.use(lod - 1);
       dst.renderTo(lod);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -280,14 +288,14 @@ void prog7() {
     process([texture, renderTextures[2]], renderTextures[3], programs[3]);
     process(renderTextures[3], renderTextures[4], programs[4]);
     processHierarchy(renderTextures[4], renderTextures[5], programs[5]);
-//    process(renderTextures[5], renderTextures[6], programs[6]);
+    process(renderTextures[5], renderTextures[6], programs[6]);
     display(texture, 0, 0);
     display(renderTextures[0], 320, 0, 320, 240);
     display(renderTextures[1], 640, 0, 320, 240);
     display(renderTextures[2], 960, 0, 320, 240);
     display(renderTextures[3], 0, 240, 320, 240);
     display(renderTextures[4], 320, 240, 320, 240);
-//    display(renderTextures[6], 320, 240, 320, 240);
+    display(renderTextures[6], 640, 240, 320, 240);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);

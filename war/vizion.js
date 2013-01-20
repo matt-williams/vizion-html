@@ -364,10 +364,12 @@ function RenderTextureLOD(gl, width, height, lodScaleX, lodScaleY) {
   }
 }
 
-RenderTextureLOD.prototype.use = function(level) {
-  this.levels[level].use();
+RenderTextureLOD.prototype.use = function(level, channel) {
+  level = (level) ? level : 0;
+  this.levels[level].use(channel);
 }
 
 RenderTextureLOD.prototype.renderTo = function(level, x, y, width, height) {
+  level = (level) ? level : 0;
   this.levels[level].renderTo(x, y, width, height);
 }

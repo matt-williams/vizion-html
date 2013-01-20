@@ -1,5 +1,5 @@
 varying highp vec2 uv;
-uniform sampler2D t[2];
+uniform sampler2D t[9];
 uniform highp vec2 duv;
 
 lowp float luma(lowp vec3 rgb) {
@@ -73,4 +73,12 @@ void prog4() {
 }
 void prog5() {
   gl_FragColor = despeckle(t[0], uv, duv);
+}
+void prog6() {
+  lowp vec4 left = texture2D(t[0], uv);
+  lowp vec4 right = texture2D(t[0], uv + vec2(duv.x));
+  gl_FragColor = vec4((left.r + step(1.0, left.r) * right.r) / 2.0, (right.g + step(1.0, right.g) * left.g) / 2.0, 0.0, 1.0);
+}
+void prog7() {
+  gl_FragColor = texture2D(t[3], uv);
 }
