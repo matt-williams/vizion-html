@@ -81,6 +81,12 @@ void prog4() {
 void prog5() {
   gl_FragColor = texture2D(t[0], uv);
 }
+void prog6() {
+  gl_FragColor = texture2D(t[0], uv);
+}
+void prog7() {
+  gl_FragColor = texture2D(t[0], uv);
+}
           </textarea>
         </div>
       </div>
@@ -142,7 +148,7 @@ void prog5() {
   var renderTextures = [];
   for (stageIdx = 0; stageIdx < numStages; stageIdx++) {
     programs.push(new Program(gl, vertexShader));
-    renderTextures.push(new RenderTexture(gl, (stageIdx < 3) ? 40 : 320, (stageIdx < 3) ? 30 : 240));
+    renderTextures.push(new RenderTexture(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1), (stageIdx == 5) ? 0.5 : 0, 1));
   }
 
   // setup GLSL program
@@ -232,7 +238,7 @@ void prog5() {
     srcs = (srcs) ? ((srcs instanceof Array) ? srcs : [srcs]) : [];
     tSize = (prog.uniformDescriptors.t) ? prog.uniformDescriptors.t.size : 0;
     t = [];
-    for (srcIndex = 0; srcIndex < ((srcs.length < tSize) ? srcs.length : tSize); srcIndex++) {
+    for (var srcIndex = 0; srcIndex < ((srcs.length < tSize) ? srcs.length : tSize); srcIndex++) {
       srcs[srcIndex].use(gl["TEXTURE" + srcIndex]);
       t.push(srcIndex);
     }
@@ -242,6 +248,23 @@ void prog5() {
     prog.uniforms.t = t;
     dst.renderTo();
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function processHierarchy(src, dst, prog) {
+    prog.use();
+    prog.attributes.xy = vertices;
+    prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
+    src.use();
+    prog.uniforms.t = 0;
+    prog.uniforms.lod = 0;
+    dst.renderTo();
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    for (var lod = 1; lod < dst.lods; lod++) {
+      dst.use();
+      prog.uniforms.lod = lod;
+      dst.renderTo(lod);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
   }
 
   function render() {
@@ -254,12 +277,16 @@ void prog5() {
     process(renderTextures[1], renderTextures[2], programs[2]);
     process([texture, renderTextures[2]], renderTextures[3], programs[3]);
     process(renderTextures[3], renderTextures[4], programs[4]);
+//    process(renderTextures[4], renderTextures[5], programs[5]);
+//    processHierarchy(renderTextures[4], renderTextures[5], programs[5]);
+//    process(renderTextures[5], renderTextures[6], programs[6]);
     display(texture, 0, 0);
     display(renderTextures[0], 320, 0, 320, 240);
     display(renderTextures[1], 640, 0, 320, 240);
     display(renderTextures[2], 960, 0, 320, 240);
     display(renderTextures[3], 0, 240, 320, 240);
     display(renderTextures[4], 320, 240, 320, 240);
+//    display(renderTextures[6], 320, 240, 320, 240);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);
