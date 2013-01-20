@@ -1,6 +1,5 @@
 varying highp vec2 uv;
-uniform sampler2D t;
-uniform sampler2D t2;
+uniform sampler2D t[2];
 uniform highp vec2 duv;
 
 lowp float luma(lowp vec3 rgb) {
@@ -45,14 +44,14 @@ lowp vec4 gaussian5x1(sampler2D t, highp vec2 uv, highp vec2 duv) {
 }
 
 void prog1() {
-  gl_FragColor = pix(luma(texture2D8x8(t, uv, duv).rgb));
+  gl_FragColor = pix(luma(texture2D8x8(t[0], uv, duv).rgb));
 }
 void prog2() {
-  gl_FragColor = gaussian5x1(t, uv, vec2(duv.x));
+  gl_FragColor = gaussian5x1(t[0], uv, vec2(duv.x));
 }
 void prog3() {
-  gl_FragColor = gaussian5x1(t, uv, vec2(duv.y));
+  gl_FragColor = gaussian5x1(t[0], uv, vec2(duv.y));
 }
 void prog4() {
-  gl_FragColor = pix(1.0 - step(luma(t, uv), luma(t2, uv)));
+  gl_FragColor = pix(1.0 - step(luma(t[0], uv), luma(t[1], uv)));
 }

@@ -78,6 +78,9 @@ void prog3() {
 void prog4() {
   gl_FragColor = texture2D(t[0], uv);
 }
+void prog5() {
+  gl_FragColor = texture2D(t[0], uv);
+}
           </textarea>
         </div>
       </div>
@@ -107,6 +110,15 @@ void prog4() {
   
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.disable(gl.DEPTH_TEST);
+  gl.depthMask(false);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  // Create a buffer and put a single clipspace rectangle in it (2 triangles)
+  var vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
+
+  var texture = new VideoTexture(gl, video);
   
   var vertexShader = new VertexShader(gl,
                                     "attribute vec2 xy;\n" +
@@ -125,20 +137,22 @@ void prog4() {
                                     "void main() {\n" +
                                     "  gl_FragColor = texture2D(t, uv);\n" +
                                     "}\n");
-  var program1 = new Program(gl, vertexShader);
-  var program2 = new Program(gl, vertexShader);
-  var program3 = new Program(gl, vertexShader);
-  var program4 = new Program(gl, vertexShader);
+  var numStages = 5;
+  var programs = [];
+  var renderTextures = [];
+  for (stageIdx = 0; stageIdx < numStages; stageIdx++) {
+    programs.push(new Program(gl, vertexShader));
+    renderTextures.push(new RenderTexture(gl, (stageIdx < 3) ? 40 : 320, (stageIdx < 3) ? 30 : 240));
+  }
 
   // setup GLSL program
   var codeMirror;
   function updateShaders() {
     var rowToLogs = {};
     try {
-      program1.setFragmentText(codeMirror.getValue(), "prog1");
-      program2.setFragmentText(codeMirror.getValue(), "prog2");
-      program3.setFragmentText(codeMirror.getValue(), "prog3");
-      program4.setFragmentText(codeMirror.getValue(), "prog4");
+      for (var stageIdx = 0; stageIdx < numStages; stageIdx++) {
+        programs[stageIdx].setFragmentText(codeMirror.getValue(), "prog" + (stageIdx + 1));
+      }
     } catch (e) {
       if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
         for ( var logIndex = 0; logIndex < e.logs.length; logIndex++) {
@@ -199,20 +213,6 @@ void prog4() {
     paused = !paused;
   }
 
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
-  gl.disable(gl.DEPTH_TEST);
-  gl.depthMask(false);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-  // Create a buffer and put a single clipspace rectangle in it (2 triangles)
-  var vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
-
-  var texture = new VideoTexture(gl, video);
-  var renderTexture = new RenderTexture(gl, 40, 30);
-  var renderTexture2 = new RenderTexture(gl, 40, 30);
-  var renderTexture3 = new RenderTexture(gl, 40, 30);
-  var renderTexture4 = new RenderTexture(gl, 320, 240);
-
   function display(tex, x, y, width, height) {
     width = (width) ? width : tex.width;
     height = (height) ? height : tex.height;
@@ -249,15 +249,17 @@ void prog4() {
       texture.update();
     }
 
-    process(texture, renderTexture, program1);
-    process(renderTexture, renderTexture2, program2);
-    process(renderTexture2, renderTexture3, program3);
-    process([texture, renderTexture3], renderTexture4, program4);
+    process(texture, renderTextures[0], programs[0]);
+    process(renderTextures[0], renderTextures[1], programs[1]);
+    process(renderTextures[1], renderTextures[2], programs[2]);
+    process([texture, renderTextures[2]], renderTextures[3], programs[3]);
+    process(renderTextures[3], renderTextures[4], programs[4]);
     display(texture, 0, 0);
-    display(renderTexture, 320, 0, 320, 240);
-    display(renderTexture2, 640, 0, 320, 240);
-    display(renderTexture3, 960, 0, 320, 240);
-    display(renderTexture4, 0, 240, 320, 240);
+    display(renderTextures[0], 320, 0, 320, 240);
+    display(renderTextures[1], 640, 0, 320, 240);
+    display(renderTextures[2], 960, 0, 320, 240);
+    display(renderTextures[3], 0, 240, 320, 240);
+    display(renderTextures[4], 320, 240, 320, 240);
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);
