@@ -333,36 +333,41 @@ VideoTexture.prototype.update = function() {
   }
 }
 
-function RenderTexture(gl, width, height, lodScaleX, lodScaleY) {
+function RenderTexture(gl, width, height) {
   Texture.call(this, gl, width, height);
-  this.lodScaleX = (lodScaleX) ? lodScaleX : 0;
-  this.lodScaleY = (lodScaleY) ? lodScaleY : 0;
   this.use();
-  this.fbIds = [];
-  var level = 0;
-  while ((width >= 1) &&
-         (height >= 1)) {
-    this.gl.texImage2D(gl.TEXTURE_2D, level, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    var fbId = gl.createFramebuffer();
-    this.gl.bindFramebuffer(gl.FRAMEBUFFER, fbId);
-    this.gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.id, level);
-    this.fbIds.push(fbId);
-    width *= lodScaleX;
-    height *= lodScaleY;
-    level++;
-  }
-  this.levels = level;
+  this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  this.fbId = gl.createFramebuffer();
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbId);
+  this.gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.id, 0);
   this.gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
 RenderTexture.prototype = new Texture();
 
-RenderTexture.prototype.renderTo = function(level, x, y, width, height) {
-  level = (level) ? level : 0;
+RenderTexture.prototype.renderTo = function(x, y, width, height) {
   x = (x) ? x : 0;
   y = (y) ? y : 0;
-  width = (width) ? width : (this.width * Math.pow(this.lodScaleX, level) - x);
-  height = (height) ? height : (this.height * Math.pow(this.lodScaleY, level) - y);
-  this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbIds[level]);
+  width = (width) ? width : this.width - x;
+  height = (height) ? height : this.height - y;
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbId);
   this.gl.viewport(x, y, width, height);
+}
+
+function RenderTextureLOD(gl, width, height, lodScaleX, lodScaleY) {
+  this.levels = [];
+  while ((width >= 1) &&
+         (height >= 1)) {
+    this.levels.push(new RenderTexture(gl, width, height));
+    width *= lodScaleX;
+    height *= lodScaleY;
+  }
+}
+
+RenderTextureLOD.prototype.use = function(level) {
+  this.levels[level].use();
+}
+
+RenderTextureLOD.prototype.renderTo = function(level, x, y, width, height) {
+  this.levels[level].renderTo(x, y, width, height);
 }

@@ -104,7 +104,6 @@ void prog7() {
   <script src="dustjs/dust-core-0.3.0.min.js" type="text/javascript"></script>
   <script src="dustjs-templates/codemirror.js" type="text/javascript"></script>
   <script type="text/javascript">
-  
   var vizion = new Vizion();
 
   var video = vizion.createVideoElement(320, 240);
@@ -143,12 +142,16 @@ void prog7() {
                                     "void main() {\n" +
                                     "  gl_FragColor = texture2D(t, uv);\n" +
                                     "}\n");
-  var numStages = 5;
+  var numStages = 7;
   var programs = [];
   var renderTextures = [];
   for (stageIdx = 0; stageIdx < numStages; stageIdx++) {
     programs.push(new Program(gl, vertexShader));
-    renderTextures.push(new RenderTexture(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1), (stageIdx == 5) ? 0.5 : 0, 1));
+    if (stageIdx != 5) {
+      renderTextures.push(new RenderTexture(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1)));
+    } else {
+      renderTextures.push(new RenderTextureLOD(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1), 0.5, 1));
+    }
   }
 
   // setup GLSL program
@@ -257,11 +260,10 @@ void prog7() {
     src.use();
     prog.uniforms.t = 0;
     prog.uniforms.lod = 0;
-    dst.renderTo();
+    dst.renderTo(0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-    for (var lod = 1; lod < dst.lods; lod++) {
-      dst.use();
-      prog.uniforms.lod = lod;
+    for (var lod = 1; lod < dst.levels.length; lod++) {
+      dst.use(lod - 1);
       dst.renderTo(lod);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
@@ -277,8 +279,7 @@ void prog7() {
     process(renderTextures[1], renderTextures[2], programs[2]);
     process([texture, renderTextures[2]], renderTextures[3], programs[3]);
     process(renderTextures[3], renderTextures[4], programs[4]);
-//    process(renderTextures[4], renderTextures[5], programs[5]);
-//    processHierarchy(renderTextures[4], renderTextures[5], programs[5]);
+    processHierarchy(renderTextures[4], renderTextures[5], programs[5]);
 //    process(renderTextures[5], renderTextures[6], programs[6]);
     display(texture, 0, 0);
     display(renderTextures[0], 320, 0, 320, 240);
@@ -293,7 +294,6 @@ void prog7() {
   }
 
   window.onload = render;
-  
   
   </script>
 </html>
