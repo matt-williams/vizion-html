@@ -87,6 +87,9 @@ void prog6() {
 void prog7() {
   gl_FragColor = texture2D(t[0], uv);
 }
+void prog8() {
+  gl_FragColor = texture2D(t[0], uv);
+}
           </textarea>
         </div>
       </div>
@@ -111,7 +114,7 @@ void prog7() {
     video.src = url;
   }, Vizion.logError);
 
-  var canvas = vizion.addCanvasElement("canvasContainer", 1280, 480);
+  var canvas = vizion.addCanvasElement("canvasContainer", 1280, 960);
   
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
@@ -120,59 +123,54 @@ void prog7() {
   gl.depthMask(false);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-  // Create a buffer and put a single clipspace rectangle in it (2 triangles)
-  var vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
+  var videoTexture = new VideoTexture(gl, video);
 
-  var texture = new VideoTexture(gl, video);
-  
-  var vertexShader = new VertexShader(gl,
-                                    "attribute vec2 xy;\n" +
-                                    "varying highp vec2 uv;\n" +
-                                    "\n" +
-                                    "void main() {\n" +
-                                    "  gl_Position = vec4(xy, 0, 1);\n" +
-                                    "  uv = 0.5 * (xy + 1.0);\n" +
-                                    "}\n");
-  var identityProgram = new Program(gl,
-                                    vertexShader,
-                                    "varying highp vec2 uv;\n" +
-                                    "uniform sampler2D t;\n" +
-                                    "uniform highp vec2 duv;\n" +
-                                    "\n" +
-                                    "void main() {\n" +
-                                    "  gl_FragColor = texture2D(t, uv);\n" +
-                                    "}\n");
-  var numStages = 7;
-  var programs = [];
-  var renderTextures = [];
-  for (stageIdx = 0; stageIdx < numStages; stageIdx++) {
-    programs.push(new Program(gl, vertexShader));
-    if (stageIdx != 5) {
-      renderTextures.push(new RenderTexture(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1)));
-    } else {
-      renderTextures.push(new RenderTextureLOD(gl, 320 / ((stageIdx < 3) ? 8 : 1), 240 / ((stageIdx < 3) ? 8 : 1), 0.5, 1));
-    }
-  }
+  var stages = [];
+  stages.push(new Stage(gl, videoTexture));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog1", 1/8, 1/8));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog2"));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog3"));
+  stages.push(new Stage(gl, [stages[0], stages[stages.length - 1]], "prog4"));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog5"));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
+  stages.push(new Stage(gl, stages.slice(stages.length - 7, stages.length), "prog7", 320, 1));
 
   // setup GLSL program
   var codeMirror;
   function updateShaders() {
     var rowToLogs = {};
-    try {
-      for (var stageIdx = 0; stageIdx < numStages; stageIdx++) {
-        programs[stageIdx].setFragmentText(codeMirror.getValue(), "prog" + (stageIdx + 1));
-      }
-    } catch (e) {
-      if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
-        for ( var logIndex = 0; logIndex < e.logs.length; logIndex++) {
-          var log = e.logs[logIndex];
-          if (rowToLogs[log.row] == null) {
-            rowToLogs[log.row] = [];
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      try {
+        stages[stageIdx].setFragmentText(codeMirror.getValue());
+      } catch (e) {
+        if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
+          for (var logIndex = 0; logIndex < e.logs.length; logIndex++) {
+            var log = e.logs[logIndex];
+            if (rowToLogs[log.row] == null) {
+              rowToLogs[log.row] = [];
+            }
+            var rowLogs = rowToLogs[log.row];
+            for (var rowLogIndex = 0; rowLogIndex < rowLogs.length; rowLogIndex++) {
+              if ((rowLogs[rowLogIndex].type == log.type) &&
+                  (rowLogs[rowLogIndex].column == log.column) &&
+                  (rowLogs[rowLogIndex].message == log.message)) {
+                log = null;
+                break;
+              }
+            }
+            if (log) {
+              rowToLogs[log.row].push(log);
+            }
           }
-          rowToLogs[log.row].push(log);
+        } else {
+          throw e;
         }
-      } else {
-        throw e;
       }
     }
     codeMirror.operation(function() {
@@ -217,85 +215,21 @@ void prog7() {
   }
 
   var pauseButton = document.getElementById("pauseButton");
-  var paused = false;
   pauseButton.onclick = function() {
-    paused = !paused;
-  }
-
-  function display(tex, x, y, width, height) {
-    width = (width) ? width : tex.width;
-    height = (height) ? height : tex.height;
-    identityProgram.use();
-    identityProgram.attributes.xy = vertices;
-    identityProgram.uniforms.t = 0;
-    tex.use();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(x, canvas.height - y - height, width, height);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-  }
-
-  function process(srcs, dst, prog) {
-    prog.use();
-    prog.attributes.xy = vertices;
-    prog.uniforms.duv = [1.0 / dst.width, 1.0 / dst.height];
-    srcs = (srcs) ? ((srcs instanceof Array) ? srcs : [srcs]) : [];
-    tSize = (prog.uniformDescriptors.t) ? prog.uniformDescriptors.t.size : 0;
-    t = [];
-    for (var srcIndex = 0; (srcIndex < srcs.length) && (t.length < tSize); srcIndex++) {
-      var src = srcs[srcIndex];
-      if (src instanceof Texture) {
-        src.use(gl["TEXTURE" + t.length]);
-        t.push(t.length);
-      } else if (src instanceof RenderTextureLOD) {
-        for (var level = 0; (level < src.levels.length) && (t.length < tSize); level++) {
-          src.use(level, gl["TEXTURE" + t.length]);
-          t.push(t.length);
-        }
-      }
-    }
-    while (t.length < tSize) {
-      t.push(0);
-    }
-    prog.uniforms.t = t;
-    dst.renderTo();
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-  }
-
-  function processHierarchy(src, dst, prog) {
-    prog.use();
-    prog.attributes.xy = vertices;
-    src.use();
-    prog.uniforms.t = 0;
-    prog.uniforms.duv = [1.0 / dst.levels[0].width, 1.0 / dst.levels[0].height];
-    dst.renderTo(0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-    for (var lod = 1; lod < dst.levels.length; lod++) {
-      prog.uniforms.duv = [1.0 / dst.levels[lod].width, 1.0 / dst.levels[lod].height];
-      dst.use(lod - 1);
-      dst.renderTo(lod);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    if (video.paused) {
+      video.play();
+    } else {
+      video.pause();
     }
   }
 
   function render() {
-    if (!paused) {
-      texture.update();
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      stages[stageIdx].update();
     }
-
-    process(texture, renderTextures[0], programs[0]);
-    process(renderTextures[0], renderTextures[1], programs[1]);
-    process(renderTextures[1], renderTextures[2], programs[2]);
-    process([texture, renderTextures[2]], renderTextures[3], programs[3]);
-    process(renderTextures[3], renderTextures[4], programs[4]);
-    processHierarchy(renderTextures[4], renderTextures[5], programs[5]);
-    process(renderTextures[5], renderTextures[6], programs[6]);
-    display(texture, 0, 0);
-    display(renderTextures[0], 320, 0, 320, 240);
-    display(renderTextures[1], 640, 0, 320, 240);
-    display(renderTextures[2], 960, 0, 320, 240);
-    display(renderTextures[3], 0, 240, 320, 240);
-    display(renderTextures[4], 320, 240, 320, 240);
-    display(renderTextures[6], 640, 240, 320, 240);
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      stages[stageIdx].display(320 * (stageIdx % 4), 240 * Math.floor(stageIdx / 4), 320, 240);
+    }
 
     // request render to be called for the next frame.
     window.webkitRequestAnimationFrame(render, canvas);

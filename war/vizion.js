@@ -354,22 +354,91 @@ RenderTexture.prototype.renderTo = function(x, y, width, height) {
   this.gl.viewport(x, y, width, height);
 }
 
-function RenderTextureLOD(gl, width, height, lodScaleX, lodScaleY) {
-  this.levels = [];
-  while ((width >= 1) &&
-         (height >= 1)) {
-    this.levels.push(new RenderTexture(gl, width, height));
-    width *= lodScaleX;
-    height *= lodScaleY;
+function Stage(gl, inputs, programName, width, height) {
+  if (!Stage.vertexShader) {
+    Stage.vertexShader = new VertexShader(gl,
+                                          "attribute vec2 xy;\n" +
+                                          "varying highp vec2 uv;\n" +
+                                          "\n" +
+                                          "void main() {\n" +
+                                          "  gl_Position = vec4(xy, 0, 1);\n" +
+                                          "  uv = 0.5 * (xy + 1.0);\n" +
+                                          "}\n");
+  }
+  if (!Stage.identityProgram) {
+    Stage.identityProgram = new Program(gl,
+                                        Stage.vertexShader,
+                                        "varying highp vec2 uv;\n" +
+                                        "uniform sampler2D t;\n" +
+                                        "uniform highp vec2 duv;\n" +
+                                        "\n" +
+                                        "void main() {\n" +
+                                        "  gl_FragColor = texture2D(t, uv);\n" +
+                                        "}\n");
+  }
+  inputs = (inputs) ? ((inputs instanceof Array) ? inputs : [inputs]) : [];   
+  if (programName) {
+    this.inputs = inputs;
+    this.programName = programName;
+    this.program = new Program(gl, Stage.vertexShader);
+    var maxWidth = 0;
+    var maxHeight = 0;
+    for (var inputIdx = 0; inputIdx < inputs.length; inputIdx++) {
+      var input = this.inputs[inputIdx];
+      input = (input instanceof Stage) ? input.output : input;
+      maxWidth = (maxWidth > input.width) ? maxWidth : input.width;
+      maxHeight = (maxHeight > input.height) ? maxHeight : input.height;
+    }
+    width = (width) ? ((width > 1) ? width : width * maxWidth) : maxWidth;
+    height = (height) ? ((height > 1) ? height : height * maxHeight) : maxHeight;
+    this.output = new RenderTexture(gl, width, height);
+  } else {
+    this.output = inputs[0];
   }
 }
 
-RenderTextureLOD.prototype.use = function(level, channel) {
-  level = (level) ? level : 0;
-  this.levels[level].use(channel);
+Stage.vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
+
+Stage.prototype.setFragmentText = function(text) {
+  if (this.programName) {
+    this.program.setFragmentText(text, this.programName);
+  }
 }
 
-RenderTextureLOD.prototype.renderTo = function(level, x, y, width, height) {
-  level = (level) ? level : 0;
-  this.levels[level].renderTo(x, y, width, height);
+Stage.prototype.update = function() {
+  if (this.program) {
+    this.program.use();
+    this.program.attributes.xy = Stage.vertices;
+    this.program.uniforms.duv = [1.0 / this.output.width, 1.0 / this.output.height];
+    tSize = (this.program.uniformDescriptors.t) ? this.program.uniformDescriptors.t.size : 0;
+    t = [];
+    for (var inputIdx = 0; (inputIdx < this.inputs.length) && (t.length < tSize); inputIdx++) {
+      var input = this.inputs[inputIdx];
+      input = (input instanceof Stage) ? input.output : input;
+      if (input instanceof Texture) {
+        input.use(gl["TEXTURE" + t.length]);
+        t.push(t.length);
+      }
+    }
+    while (t.length < tSize) {
+      t.push(0);
+    }
+    this.program.uniforms.t = t;
+    this.output.renderTo();
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  } else if (this.output instanceof VideoTexture) {
+    this.output.update();
+  }
+}
+
+Stage.prototype.display = function(x, y, width, height) {
+  width = (width) ? width : this.output.width;
+  height = (height) ? height : this.output.height;
+  Stage.identityProgram.use();
+  Stage.identityProgram.attributes.xy = Stage.vertices;
+  Stage.identityProgram.uniforms.t = 0;
+  this.output.use();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(x, canvas.height - y - height, width, height);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
