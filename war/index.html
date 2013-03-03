@@ -90,6 +90,15 @@ void prog7() {
 void prog8() {
   gl_FragColor = texture2D(t[0], uv);
 }
+void prog9() {
+  gl_FragColor = texture2D(t[0], uv);
+}
+void prog10() {
+  gl_FragColor = texture2D(t[0], uv);
+}
+void prog11() {
+  gl_FragColor = texture2D(t[0], uv);
+}
           </textarea>
         </div>
       </div>
@@ -101,6 +110,7 @@ void prog8() {
   <script src="jquery/jquery-1.7.2.min.js" type="text/javascript"></script>
   <script src="bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
   <script src="webgl-utils.js" type="text/javascript"></script>
+  <script src="webgl.js" type="text/javascript"></script>
   <script src="vizion.js" type="text/javascript"></script>
   <script src="codemirror/codemirror-compressed.js" type="text/javascript"></script>
   <script src="codemirror/glsl.js" type="text/javascript"></script>
@@ -109,12 +119,12 @@ void prog8() {
   <script type="text/javascript">
   var vizion = new Vizion();
 
-  var video = vizion.createVideoElement(320, 240);
+  var video = vizion.createVideoElement(256, 256);
   vizion.getVideoURL(function(url) {
     video.src = url;
   }, Vizion.logError);
 
-  var canvas = vizion.addCanvasElement("canvasContainer", 1280, 960);
+  var canvas = vizion.addCanvasElement("canvasContainer", video.width * 4, video.height * 6);
   
   // Get A WebGL context
   var gl = WebGLUtils.setupWebGL(canvas);
@@ -128,18 +138,47 @@ void prog8() {
   var stages = [];
   stages.push(new Stage(gl, videoTexture));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog1", 1/8, 1/8));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog2"));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog2", 1, 1, true));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog3"));
   stages.push(new Stage(gl, [stages[0], stages[stages.length - 1]], "prog4"));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog5"));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1/2, 1));
-  stages.push(new Stage(gl, stages.slice(stages.length - 7, stages.length), "prog7", 320, 1));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1, 1, true));
+  var prog6Out = stages[stages.length - 1];
+  stages.push(new Stage(gl, prog6Out, "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog7", 1/2, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 2]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 4]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 8]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 10]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 12]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 14]], "prog8", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog8"));
+  var prog8Out = stages[stages.length - 1];
+  stages.push(new Stage(gl, prog6Out, "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 2]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 4]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 8]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 10]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 12]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 14]], "prog10", 1, 1, true));
+  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog10"));
+  var prog10Out = stages[stages.length - 1];
+  stages.push(new Stage(gl, [prog8Out, prog10Out], "prog11"));
 
   // setup GLSL program
   var codeMirror;
@@ -227,8 +266,12 @@ void prog8() {
     for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
       stages[stageIdx].update();
     }
+    var visibleStageIdx = 0;
     for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
-      stages[stageIdx].display(320 * (stageIdx % 4), 240 * Math.floor(stageIdx / 4), 320, 240);
+      if (!stages[stageIdx].isHidden()) {
+        stages[stageIdx].display(video.width * (visibleStageIdx % 4), video.height * Math.floor(visibleStageIdx / 4), video.width, video.height);
+        visibleStageIdx++;
+      }
     }
 
     // request render to be called for the next frame.
