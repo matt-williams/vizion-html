@@ -50,7 +50,7 @@ Vizion.prototype.getVideoURL = function(success, failure) {
 	}
 }
 
-function Stage(gl, inputs, programName, width, height, hidden) {
+function Stage(gl, inputs, programName, width, height, hidden, filter) {
   if (!Stage.vertexShader) {
     Stage.vertexShader = new VertexShader(gl,
                                           "attribute vec2 xy;\n" +
@@ -76,7 +76,10 @@ function Stage(gl, inputs, programName, width, height, hidden) {
   if (programName) {
     this.inputs = inputs;
     this.programName = programName;
-    this.program = new Program(gl, Stage.vertexShader);
+    if (!Stage.programs[programName]) {
+      Stage.programs[programName] = new Program(gl, Stage.vertexShader);
+    }
+    this.program = Stage.programs[programName];
     var maxWidth = 0;
     var maxHeight = 0;
     for (var inputIdx = 0; inputIdx < inputs.length; inputIdx++) {
@@ -87,7 +90,7 @@ function Stage(gl, inputs, programName, width, height, hidden) {
     }
     width = (width) ? ((width > 1) ? width : width * maxWidth) : maxWidth;
     height = (height) ? ((height > 1) ? height : height * maxHeight) : maxHeight;
-    this.output = new RenderTexture(gl, width, height);
+    this.output = new RenderTexture(gl, width, height, filter);
   } else {
     this.output = inputs[0];
   }
@@ -95,9 +98,11 @@ function Stage(gl, inputs, programName, width, height, hidden) {
 }
 
 Stage.vertices = new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0]);
+Stage.programs = {};
 
 Stage.prototype.setFragmentText = function(text) {
-  if (this.programName) {
+  if ((this.programName) &&
+      (Stage.programs[this.programName].getFragmentText() != text)) {
     this.program.setFragmentText(text, this.programName);
   }
 }

@@ -1,3 +1,46 @@
+WebGL = {
+  getContext: function(canvas, id, attribs) {
+    try {
+      return canvas.getContext(id, attribs);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  getGL: function(canvas, attribs) {
+    return WebGL.getContext(canvas, "webgl", attribs) ||
+           WebGL.getContext(canvas, "experimental-webgl", attribs) ||
+           WebGL.getContext(canvas, "webkit-3d", attribs) ||
+           WebGL.getContext(canvas, "moz-webgl", attribs);
+  },
+
+  setFrameCallbackFunction: (function() {
+    return window.requestAnimationFrame ||
+           window.webkitRequestAnimationFrame ||
+           window.mozRequestAnimationFrame ||
+           window.oRequestAnimationFrame ||
+           window.msRequestAnimationFrame ||
+           function(callback, element) { return window.setTimeout(callback, 1000/60); };
+  })(),
+  setFrameCallback: function(callback, element) {
+    var func = WebGL.setFrameCallbackFunction;
+    return func(callback, element);
+  },
+
+  cancelFrameCallbackFunction: (function() {
+    return window.cancelAnimationFrame ||
+           window.webkitCancelAnimationFrame ||
+           window.mozCancelAnimationFrame ||
+           window.oCancelAnimationFrame ||
+           window.msCancelAnimationFrame ||
+           window.clearTimeout;
+  })(),
+  cancelFrameCallback: function(callback) {
+    var func = WebGL.cancelFrameCallbackFunction;
+    return func(callback);
+  }
+};
+
 function ShaderCompileException(logs) {
   this.logs = logs;
 }
@@ -7,12 +50,13 @@ function Shader(gl, type, text, name) {
   this.type = type;
   this.listeners = [];
   if (text != null) {
-      this.setText(text, name);
+    this.setText(text, name);
   }
 }
 
 Shader.prototype.setText = function(text, name) {
   var id = this.gl.createShader(this.type);
+  this.text = text;
   this.gl.shaderSource(id, text + ((name) ? "void main(){" + name + "();}" : ""));
   this.gl.compileShader(id);
 
@@ -38,6 +82,10 @@ Shader.prototype.setText = function(text, name) {
   }
   this.id = id;
   this.notifyListeners();
+}
+
+Shader.prototype.getText = function() {
+  return this.text;
 }
 
 Shader.prototype.addListener = function(func) {
@@ -162,8 +210,16 @@ Program.prototype.setVertexText = function(text, name) {
   return this.vertexShader.setText(text, name);
 }
 
+Program.prototype.getVertexText = function() {
+  return this.vertexShader.getText();
+}
+
 Program.prototype.setFragmentText = function(text, name) {
   return this.fragmentShader.setText(text, name);
+}
+
+Program.prototype.getFragmentText = function() {
+  return this.fragmentShader.getText();
 }
 
 Program.prototype.getUniform = function(uniform) {
@@ -233,6 +289,9 @@ Program.prototype.setAttribute = function(attribute, value) {
       this.gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       this.gl.bufferData(gl.ARRAY_BUFFER, value, gl.STATIC_DRAW);
       switch (this.attributeDescriptors[attribute].type) {
+        case "FLOAT":
+          this.gl.vertexAttribPointer(location, 1, gl.FLOAT, false, 0, 0); 
+          break;
         case "FLOAT_VEC2":
           this.gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0); 
           break;
@@ -254,8 +313,9 @@ Program.prototype.use = function() {
   this.gl.useProgram(this.id);
 }
 
-function Texture(gl, width, height) {
+function Texture(gl, width, height, filter) {
   if (gl) {
+    filter = (filter) ? filter : gl.NEAREST;
     this.gl = gl;
     this.width = width;
     this.height = height;
@@ -263,8 +323,8 @@ function Texture(gl, width, height) {
     this.use();
     this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    this.gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
   }
 }
 
@@ -274,22 +334,22 @@ Texture.prototype.use = function(channel) {
   this.gl.bindTexture(gl.TEXTURE_2D, this.id);
 }
 
-function VideoTexture(gl, video) {
-  Texture.call(this, gl, video.width, video.height);
+function VideoTexture(gl, video, filter) {
+  Texture.call(this, gl, video.width, video.height, filter);
   this.video = video;
 }
 
 VideoTexture.prototype = new Texture();
 
 VideoTexture.prototype.update = function() {
-  if (video.readyState == 4) {
+  if (this.video.readyState == 4) {
     this.gl.bindTexture(gl.TEXTURE_2D, this.id);
     this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
   }
 }
 
-function RenderTexture(gl, width, height) {
-  Texture.call(this, gl, width, height);
+function RenderTexture(gl, width, height, filter) {
+  Texture.call(this, gl, width, height, filter);
   this.use();
   this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   this.fbId = gl.createFramebuffer();
@@ -307,6 +367,96 @@ RenderTexture.prototype.renderTo = function(x, y, width, height) {
   height = (height) ? height : this.height - y;
   this.gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbId);
   this.gl.viewport(x, y, width, height);
+}
+
+RenderTexture.prototype.data = function() {
+  if (!this.array) {
+    this.array = new Uint8Array(this.width * this.height * 4);
+  }
+  this.renderTo();
+  this.gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.array);
+  return this.array;
+}
+
+function ImageTexture(gl, image, filter) {
+  if (gl) {
+    Texture.call(this, gl, image.width, image.height, filter);
+    this.image = image;
+    var other = this;
+    this.image.addEventListener('load', function() { other.update(); });
+  }
+}
+
+ImageTexture.prototype = new Texture();
+
+ImageTexture.prototype.update = function() {
+  this.gl.bindTexture(gl.TEXTURE_2D, this.id);
+  this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image);
+}
+
+function CanvasTexture(gl, canvas, filter) {
+  if (gl) {
+    Texture.call(this, gl, canvas.width, canvas.height, filter);
+    this.canvas = canvas;
+    this.update();
+  }
+}
+
+CanvasTexture.prototype = new Texture();
+
+CanvasTexture.prototype.update = function() {
+   this.gl.bindTexture(gl.TEXTURE_2D, this.id);
+   this.gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+ }
+
+function TextTexture(gl, width, height, fontSize, lineWidth, filter) {
+  var canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  CanvasTexture.call(this, gl, canvas, filter);
+  this.context = canvas.getContext('2d');
+  this.context.font = fontSize + 'px sans-serif';
+  this.context.textAlign = 'left';
+  this.context.textBaseline = 'top';
+  this.context.lineWidth = lineWidth;
+  this.context.lineStyle = '#000';
+  this.context.fillStyle = '#fff';
+  this.lineHeight = fontSize + lineWidth - 1;
+  this.x = 0;
+  this.y = 0;
+  this.dictionary = {};
+}
+
+TextTexture.prototype = new CanvasTexture();
+
+TextTexture.prototype.createText = function(text) {
+  if (this.dictionary[text]) {
+    return this.dictionary[text];
+  }
+  var width = this.context.measureText(text).width;
+  if (this.x + width > this.canvas.width) {
+    this.x = 0;
+    this.y += this.lineHeight;
+  }
+  var bounds = {x: this.x,
+                y: this.y,
+                w: width,
+                h: this.lineHeight};
+  this.dictionary[text] = bounds;
+  this.context.save();
+  this.context.beginPath();
+  this.context.moveTo(bounds.x, bounds.y);
+  this.context.lineTo(bounds.x + bounds.w, bounds.y);
+  this.context.lineTo(bounds.x + bounds.w, bounds.y + bounds.h);
+  this.context.lineTo(bounds.x, bounds.y + bounds.h);
+  this.context.lineTo(bounds.x, bounds.y);
+  this.context.clip();
+  this.context.strokeText(text, this.x, this.y);
+  this.context.fillText(text, this.x, this.y);
+  this.context.restore();
+  this.update();
+  this.x += width;
+  return bounds;
 }
 
 function Matrix(matrix) {
@@ -339,20 +489,34 @@ Matrix.rotation = function(a, x, y, z) {
                      0, 0, 0, 1]);
 }
 
-Matrix.prototype.times = function(matrix) {
-  var result = new Float32Array(16); 
-  var a = this.matrix;
-  var b = matrix.matrix;
-  for (var ii = 0; ii < 4; ii++) {
-    for (var jj = 0; jj < 4; jj++) {
-      var val = 0;
-      for (var kk = 0; kk < 4; kk++) {
-        val += a[kk * 4 + jj] * b[ii * 4 + kk];
+Matrix.prototype.times = function(other) {
+  if (other instanceof Matrix) {
+    var result = new Float32Array(16); 
+    var a = this.matrix;
+    var b = other.matrix;
+    for (var ii = 0; ii < 4; ii++) {
+      for (var jj = 0; jj < 4; jj++) {
+        var val = 0;
+        for (var kk = 0; kk < 4; kk++) {
+          val += a[kk * 4 + jj] * b[ii * 4 + kk];
+        }
+        result[ii * 4 + jj] = val;
       }
-      result[ii * 4 + jj] = val;
     }
+    return new Matrix(result);
+  } else {
+    var result = new Float32Array(4);
+    var a = this.matrix;
+    var b = other;
+    for (var ii = 0; ii < 4; ii++) {
+      var val = 0;
+      for (var jj = 0; jj < 4; jj++) {
+        val += a[jj * 4 + ii] * b[jj];
+      }
+      result[i] = val;
+    }
+    return result;
   }
-  return new Matrix(result);
 }
 
 Matrix.prototype.transpose = function() {
