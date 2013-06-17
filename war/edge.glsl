@@ -11,7 +11,7 @@ highp vec4 pix(highp float val) {
 }
 
 highp float diff(highp vec2 pos, highp vec2 dpos) {
-  return luma(pos + dpos) - luma(uv - dpos);
+  return luma(pos + dpos) - luma(pos - dpos);
 }
 
 highp float grad(highp vec2 pos, highp vec2 dpos) {

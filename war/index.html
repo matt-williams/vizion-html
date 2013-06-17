@@ -4,19 +4,6 @@
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Le styles -->
-<link href="bootstrap/css/bootstrap.css" rel="stylesheet">
-<style type="text/css">
-body {
-	padding-top: 60px;
-	padding-bottom: 40px;
-}
-.sidebar-nav {
-	padding: 9px 0;
-}
-</style>
-<link href="bootstrap/css/bootstrap-responsive.css" rel="stylesheet">
-<!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
 <!--[if lt IE 9]>
   <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
 <![endif]-->
@@ -24,80 +11,181 @@ body {
 <title>Vizion</title>
 </head>
 <body>
-    <div class="navbar navbar-fixed-top">
-      <div class="navbar-inner">
-        <div class="container-fluid">
-          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </a>
-          <a class="brand" href="#">Project name</a>
-          <div class="btn-group pull-right">
-            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-              <i class="icon-user"></i> Username
-              <span class="caret"></span>
-            </a>
-            <ul class="dropdown-menu">
-              <li><a href="#">Profile</a></li>
-              <li class="divider"></li>
-              <li><a href="#">Sign Out</a></li>
-            </ul>
-          </div>
-          <div class="nav-collapse">
-            <ul class="nav">
-              <li class="active"><a href="#">Home</a></li>
-              <li><a href="#about">About</a></li>
-              <li><a href="#contact">Contact</a></li>
-            </ul>
-          </div><!--/.nav-collapse -->
-        </div>
-      </div>
-    </div>
-
     <div class="container">
       <div class="row">
         <div class="span12">
           <input type="file" id="fileSelector" name="file"/>
           <button id="loadShaderButton" disabled>Load</button>
+          <button id="saveShaderButton">Save</button>
           <button id="pauseButton">Pause/Unpause</button>
           <textarea id="fragmentShader" style="width: 100%; height: 40ex;">
 varying highp vec2 uv;
-uniform sampler2D t[1];
+uniform sampler2D t[2];
 uniform highp vec2 duv;
 
+lowp float luma(lowp vec3 rgb) {
+  return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+}
+
+lowp float luma(sampler2D t, highp vec2 pos) {
+  return luma(texture2D(t, pos).rgb);
+}
+
+lowp float val(lowp vec3 rgb) {
+  return rgb.r;
+}
+
+lowp float val(sampler2D t, highp vec2 pos) {
+  return val(texture2D(t, pos).rgb);
+}
+
+lowp float index(highp vec2 uv, highp vec2 duv) {
+  return dot(uv - duv / 2.0, vec2(1.0, 1.0 / duv.y) / duv.x);
+}
+
+lowp vec4 texture2D2x2(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  return (texture2D(t, uv) +
+          texture2D(t, uv + vec2(duv.x, 0)) +
+          texture2D(t, uv + vec2(0, duv.y)) +
+          texture2D(t, uv + duv)) / 4.0;
+}
+
+lowp vec4 texture2D4x4(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  return (texture2D2x2(t, uv, duv) +
+          texture2D2x2(t, uv + vec2(2.0 * duv.x, 0), duv) +
+          texture2D2x2(t, uv + vec2(0, 2.0 * duv.y), duv) +
+          texture2D2x2(t, uv + 2.0 * duv, duv)) / 4.0;
+}
+
+lowp vec4 texture2D8x8(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  return (texture2D4x4(t, uv, duv) +
+          texture2D4x4(t, uv + vec2(4.0 * duv.x, 0), duv) +
+          texture2D4x4(t, uv + vec2(0, 4.0 * duv.y), duv) +
+          texture2D4x4(t, uv + 4.0 * duv, duv)) / 4.0;
+}
+
+highp vec4 pix(highp float val) {
+  return vec4(val, val, val, 1);
+}
+
+lowp vec4 gaussian5x1(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  return ( 7.0 / 107.0 * texture2D(t, uv - 2.0 * duv) +
+          26.0 / 107.0 * texture2D(t, uv - 1.0 * duv) +
+          41.0 / 107.0 * texture2D(t, uv) +
+          26.0 / 107.0 * texture2D(t, uv + 1.0 * duv) +
+           7.0 / 107.0 * texture2D(t, uv + 2.0 * duv));
+}
+
+lowp float contrast(sampler2D t1, sampler2D t2, highp vec2 uv) {
+  return smoothstep(luma(t2, uv) * 0.9, luma(t2, uv) * 1.1, luma(t1, uv));
+}
+
+lowp vec4 despeckle(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  lowp vec4 surround = texture2D(t, uv + vec2(-duv.x, -duv.y)) +
+                       texture2D(t, uv + vec2(0, -duv.y)) +
+                       texture2D(t, uv + vec2(duv.x, -duv.y)) +
+                       texture2D(t, uv + vec2(-duv.x, 0)) +
+                       texture2D(t, uv + vec2(duv.x, 0)) +
+                       texture2D(t, uv + vec2(-duv.x, duv.y)) +
+                       texture2D(t, uv + vec2(0, duv.y)) +
+                       texture2D(t, uv + vec2(duv.x, duv.y));
+  lowp vec4 center = texture2D(t, uv);
+  return clamp(center, step(5.5, surround), step(2.5, surround));
+}
+
+lowp vec4 accumulateUp(sampler2D t, highp vec2 uv, highp vec2 duv) {
+  lowp vec4 lo = texture2D(t, uv - duv / 4.0);
+  lowp vec4 hi = texture2D(t, uv + duv / 4.0);
+  return vec4((lo.rb + step(1.0, lo.rb) * hi.rb), (hi.ga + step(1.0, hi.ga) * lo.ga)).rbga * 0.5;
+}
+
+lowp vec4 accumulateDown(sampler2D loT, sampler2D ourT, highp vec2 uv, highp vec2 duvNorm, highp float duvLen) {
+  lowp vec4 lo = texture2D(loT, uv);
+  lowp vec4 our = texture2D(ourT, uv);
+  lowp vec4 res;
+  if (mod(dot(uv, duvNorm), 2.0 * duvLen) &lt; duvLen) {
+    lowp vec4 lo2 = texture2D(loT, uv - duvNorm * duvLen * 1.5) * step(0.0, dot(uv, duvNorm) - 1.5 * duvLen);
+    res = vec4(lo.rb, duvLen * our.ga + step(1.0, our.ga) * lo2.ga).rbga;
+  } else {
+    lowp vec4 lo2 = texture2D(loT, uv + duvNorm * duvLen * 1.5) * step(dot(uv, duvNorm) + 1.5 * duvLen, 1.0);
+    res = vec4(duvLen * our.rb + step(1.0, our.rb) * lo2.rb, lo.ga).rbga;
+  }
+  lowp vec2 mx = step(res.rg, res.ba);
+  return res * vec4(1.0 - mx, mx);
+}
+
+lowp float detect(sampler2D t, highp vec2 uv, highp vec2 duvNorm, highp float duvLen) {
+  lowp vec4 mid = texture2D(t, uv);
+  lowp vec4 lo = texture2D(t, uv - duvNorm * (mid.a + duvLen));
+  lowp vec4 hi = texture2D(t, uv + duvNorm * (mid.b + duvLen));
+  lowp vec4 lo2 = texture2D(t, uv - duvNorm * (mid.a + lo.g + duvLen));
+  lowp vec4 hi2 = texture2D(t, uv + duvNorm * (mid.b + hi.r + duvLen));
+  return step(mid.r + mid.g, 0.0) *
+         smoothstep(-0.02, 0.0, -abs(mid.b - mid.a)) *
+         smoothstep(-0.02, 0.0, -abs(mid.a - 1.5 * lo.g)) *
+         smoothstep(-0.02, 0.0, -abs(mid.b - 1.5 * hi.r)) *
+         smoothstep(-0.02, 0.0, -abs(mid.a - 1.5 * lo2.a)) *
+         smoothstep(-0.02, 0.0, -abs(mid.b - 1.5 * hi2.b));
+}
+
+lowp float offset(lowp float pos, lowp float neg, lowp float delta) {
+  return sign(pos - neg + delta / 2.0) * (max(pos, neg) - 3.0 * delta);
+}
+
+lowp float offset(lowp float pos1, lowp float pos2, lowp float neg1, lowp float neg2, lowp float delta) {
+  return offset(max(pos1, pos2), max(neg1, neg2), delta);
+}
+
 void prog1() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = pix(luma(texture2D8x8(t[0], uv, duv).rgb));
 }
 void prog2() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = gaussian5x1(t[0], uv, vec2(duv.x, 0));
 }
 void prog3() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = gaussian5x1(t[0], uv, vec2(0, duv.y));
 }
 void prog4() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = pix(contrast(t[0], t[1], uv));
 }
 void prog5() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = despeckle(t[0], uv, duv);
 }
 void prog6() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = step(0.3, vec4(0, 0, 1, 1) + vec4(1, 1, -1, -1) * texture2D(t[0], uv).rrrr);
 }
 void prog7() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = accumulateUp(t[0], uv, vec2(duv.x, 0));
 }
 void prog8() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = accumulateDown(t[0], t[1], uv, vec2(1.0, 0), duv.x);
 }
 void prog9() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = accumulateUp(t[0], uv, vec2(0, duv.y));
 }
 void prog10() {
-  gl_FragColor = texture2D(t[0], uv);
+  gl_FragColor = accumulateDown(t[0], t[1], uv, vec2(0, 1.0), duv.y);
 }
 void prog11() {
-  gl_FragColor = texture2D(t[0], uv);
+  lowp vec2 uv2 = uv;
+  lowp vec4 h0 = texture2D(t[0], uv);
+  lowp vec4 v0 = texture2D(t[1], uv);
+  if (max(h0.r + h0.g, h0.b + h0.a) > max(v0.r + v0.g, v0.b + v0.a)) {
+    uv2.x += offset(h0.r, h0.b, h0.g, h0.a, duv.x);
+    v0 = texture2D(t[1], uv2);
+    uv2.y += offset(v0.r, v0.b, v0.g, v0.a, duv.y);
+    h0 = texture2D(t[0], uv2);
+    gl_FragColor = vec4(max(h0.r + h0.g, h0.b + h0.a), max(v0.r + v0.g, v0.b + v0.a), 0, 1);
+//    gl_FragColor = vec4(h0.b, 0, 0, 1);
+  } else {
+    uv2.y += offset(v0.r, v0.b, v0.g, v0.a, duv.y);
+    h0 = texture2D(t[0], uv2);
+    uv2.x += offset(h0.r, h0.b, h0.g, h0.a, duv.x);
+    v0 = texture2D(t[1], uv2);
+    gl_FragColor = vec4(max(h0.r + h0.g, h0.b + h0.a), max(v0.r + v0.g, v0.b + v0.a), (duv.x + duv.y) / (duv.x + duv.y + abs(max(h0.r + h0.g, h0.b + h0.a) - max(v0.r + v0.g, v0.b + v0.a))), 1);
+//    gl_FragColor = vec4(h0.b, 0, 0, 1);
+  }
+  //gl_FragColor = vec4(0.5 - (uv - uv2), 0, 1);
 }
           </textarea>
         </div>
@@ -109,13 +197,13 @@ void prog11() {
   </body>
   <script src="jquery/jquery-1.7.2.min.js" type="text/javascript"></script>
   <script src="bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
-  <script src="webgl-utils.js" type="text/javascript"></script>
   <script src="webgl.js" type="text/javascript"></script>
   <script src="vizion.js" type="text/javascript"></script>
   <script src="codemirror/codemirror-compressed.js" type="text/javascript"></script>
   <script src="codemirror/glsl.js" type="text/javascript"></script>
   <script src="dustjs/dust-core-0.3.0.min.js" type="text/javascript"></script>
   <script src="dustjs-templates/codemirror.js" type="text/javascript"></script>
+  <script src="filesaver/FileSaver.min.js" type="text/javascript"></script>
   <script type="text/javascript">
   var vizion = new Vizion();
 
@@ -127,7 +215,7 @@ void prog11() {
   var canvas = vizion.addCanvasElement("canvasContainer", video.width * 4, video.height * 6);
   
   // Get A WebGL context
-  var gl = WebGLUtils.setupWebGL(canvas);
+  var gl = WebGL.getGL(canvas);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.disable(gl.DEPTH_TEST);
   gl.depthMask(false);
@@ -137,10 +225,10 @@ void prog11() {
 
   var stages = [];
   stages.push(new Stage(gl, videoTexture));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog1", 1/8, 1/8));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog1", 1/8, 1/8, true));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog2", 1, 1, true));
-  stages.push(new Stage(gl, stages[stages.length - 1], "prog3"));
-  stages.push(new Stage(gl, [stages[0], stages[stages.length - 1]], "prog4"));
+  stages.push(new Stage(gl, stages[stages.length - 1], "prog3", 1, 1, true));
+  stages.push(new Stage(gl, [stages[0], stages[stages.length - 1]], "prog4", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog5"));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog6", 1, 1, true));
   var prog6Out = stages[stages.length - 1];
@@ -159,7 +247,7 @@ void prog11() {
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 10]], "prog8", 1, 1, true));
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 12]], "prog8", 1, 1, true));
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 14]], "prog8", 1, 1, true));
-  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog8"));
+  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog8", 1, 1));
   var prog8Out = stages[stages.length - 1];
   stages.push(new Stage(gl, prog6Out, "prog9", 1, 1/2, true));
   stages.push(new Stage(gl, stages[stages.length - 1], "prog9", 1, 1/2, true));
@@ -176,7 +264,7 @@ void prog11() {
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 10]], "prog10", 1, 1, true));
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 12]], "prog10", 1, 1, true));
   stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 14]], "prog10", 1, 1, true));
-  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog10"));
+  stages.push(new Stage(gl, [stages[stages.length - 1], prog6Out], "prog10", 1, 1));
   var prog10Out = stages[stages.length - 1];
   stages.push(new Stage(gl, [prog8Out, prog10Out], "prog11"));
 
@@ -240,6 +328,7 @@ void prog11() {
   // Load files
   var fileSelector = document.getElementById("fileSelector");
   var loadShaderButton = document.getElementById("loadShaderButton");
+  var saveShaderButton = document.getElementById("saveShaderButton");
   fileSelector.addEventListener('change', function() {
     var disabled = (fileSelector.files.length == 0);
     loadShaderButton.disabled = disabled;
@@ -251,6 +340,10 @@ void prog11() {
       codeMirror.setValue(reader.result);
     };
     reader.readAsText(file);
+  }
+  saveShaderButton.onclick = function() {
+    var filename = (fileSelector.files.length > 0) ? fileSelector.files[0].name : "fragment.glsl";
+    saveAs(new Blob([codeMirror.getValue()], {type: "x-shader/x-fragment"}), filename);
   }
 
   var pauseButton = document.getElementById("pauseButton");
@@ -266,6 +359,7 @@ void prog11() {
     for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
       stages[stageIdx].update();
     }
+
     var visibleStageIdx = 0;
     for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
       if (!stages[stageIdx].isHidden()) {
@@ -275,7 +369,7 @@ void prog11() {
     }
 
     // request render to be called for the next frame.
-    window.webkitRequestAnimationFrame(render, canvas);
+    WebGL.setFrameCallback(render, canvas);
   }
 
   window.onload = render;

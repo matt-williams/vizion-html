@@ -22,6 +22,13 @@ varying highp vec2 uv;
 uniform sampler2D t[5];
 uniform highp vec2 duv;
 
+void identity1() {
+  gl_FragColor = texture2D(t[0], uv);
+}
+void identity2() {
+  gl_FragColor = texture2D(t[1], uv);
+}
+
 lowp float luma(lowp vec3 rgb) {
   return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 }
@@ -40,9 +47,6 @@ lowp vec4 gaussian5x1(sampler2D t, highp vec2 uv, highp vec2 duv) {
 
 void blurX() {
   gl_FragColor = gaussian5x1(t[0], uv, vec2(duv.x, 0));
-}
-void blurX2() {
-  gl_FragColor = gaussian5x1(t[1], uv, vec2(duv.x, 0));
 }
 
 void blurY() {
@@ -98,7 +102,7 @@ void calculateFlow() {
 }
 
 lowp vec3 uv2rgb(highp vec2 uv) {
-  highp vec3 rgb = (vec3(dot(uv, vec2(1.0, 0)), dot(uv, vec2(-0.5, -sqrt(3.0) / 2.0)), dot(uv, vec2(-0.5, sqrt(3.0 / 2.0)))) + ((1.0 - sqrt(3.0) / 2.0)) / 2.0) / (1.0 + sqrt(3.0) / 2.0);
+  highp vec3 rgb = (vec3(dot(uv, vec2(1.0, 0)), dot(uv, vec2(-0.5, -sqrt(3.0) / 2.0)), dot(uv, vec2(-0.5, sqrt(3.0) / 2.0))) + 0.5) / 1.5 * (pow(uv.x, 2.0) + pow(uv.y, 2.0));
   return rgb;
 }
 
@@ -106,8 +110,16 @@ void calculateHue() {
   gl_FragColor = vec4(uv2rgb(texture2D(t[0], uv).rg * 2.0 - 1.0), 1.0);
 }
 
+void warp_forward() {
+  gl_FragColor = texture2D(t[0], uv + (texture2D(t[1], uv).rg * 2.0 - 1.0) * duv);
+}
+
+void warp_back() {
+  gl_FragColor = texture2D(t[0], uv - (texture2D(t[1], uv).rg * 2.0 - 1.0) * duv);
+}
+
 void accumulate() {
-  gl_FragColor = 0.0625 * (texture2D(t[0], uv) - 0.5) + 0.125 * (texture2D(t[1], uv) - 0.5) + 0.25 * (texture2D(t[2], uv) - 0.5) + 0.5 * (texture2D(t[3], uv) - 0.5) + texture2D(t[4], uv);
+  gl_FragColor = (texture2D(t[0], uv) + texture2D(t[1], uv)) / 2.0;
 }
           </textarea>
         </div>
@@ -121,6 +133,8 @@ void accumulate() {
   <script src="vizion.js" type="text/javascript"></script>
   <script src="codemirror/codemirror-compressed.js" type="text/javascript"></script>
   <script src="codemirror/glsl.js" type="text/javascript"></script>
+  <script src="dustjs/dust-core-0.3.0.min.js" type="text/javascript"></script>
+  <script src="dustjs-templates/codemirror.js" type="text/javascript"></script>
   <script type="text/javascript">
   var vizion = new Vizion();
 
@@ -143,39 +157,61 @@ void accumulate() {
   videoTextures[0].update();
 
   var stages = [];
-  stages.push(new Stage(gl, videoTextures, "differentiate", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, videoTextures, "identity1", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  var lastTex0 = stages.length;
+  stages.push(new Stage(gl, videoTextures, "identity2", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurX", 0.5, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
+  var lastTex1 = stages.length;
+
+  stages.push(new Stage(gl, [stages[lastTex0 - 1], stages[lastTex1 - 1]], "differentiate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateFlow", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
-  stages.push(new Stage(gl, videoTextures, "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, videoTextures, "blurX2", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, [stages[stages.length - 3], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex0 - 3], stages[stages.length - 2]], "warp_forward", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex1 - 3], stages[stages.length - 3]], "warp_back", 1, 1, true, gl.LINEAR));
+
+  stages.push(new Stage(gl, [stages[stages.length - 2], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateFlow", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "accumulate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, [stages[stages.length - 3], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex0 - 5], stages[stages.length - 2]], "warp_forward", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex1 - 5], stages[stages.length - 3]], "warp_back", 1, 1, true, gl.LINEAR));
+
+  stages.push(new Stage(gl, [stages[stages.length - 2], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateFlow", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "accumulate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, [stages[stages.length - 3], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex0 - 7], stages[stages.length - 2]], "warp_forward", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex1 - 7], stages[stages.length - 3]], "warp_back", 1, 1, true, gl.LINEAR));
+
+  stages.push(new Stage(gl, [stages[stages.length - 2], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateFlow", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "accumulate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 6], "blurX", 0.5, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "blurY", 1, 0.5, true, gl.LINEAR));
-  stages.push(new Stage(gl, [stages[stages.length - 3], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex0 - 9], stages[stages.length - 2]], "warp_forward", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[lastTex1 - 9], stages[stages.length - 3]], "warp_back", 1, 1, true, gl.LINEAR));
+
+  stages.push(new Stage(gl, [stages[stages.length - 2], stages[stages.length - 1]], "differentiate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateFlow", 1, 1, true, gl.LINEAR));
+  stages.push(new Stage(gl, [stages[stages.length - 1], stages[stages.length - 6]], "accumulate", 1, 1, true, gl.LINEAR));
   stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
-  stages.push(new Stage(gl, [stages[stages.length - 30], stages[stages.length - 23], stages[stages.length - 16], stages[stages.length - 9], stages[stages.length - 2]], "accumulate", 1, 1, true, gl.LINEAR));
-  stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
+
+//  stages.push(new Stage(gl, [stages[stages.length - 30], stages[stages.length - 23], stages[stages.length - 16], stages[stages.length - 9], stages[stages.length - 2]], "accumulate", 1, 1, true, gl.LINEAR));
+//  stages.push(new Stage(gl, stages[stages.length - 1], "calculateHue", 1, 1, false, gl.LINEAR));
 
   // setup GLSL program
   var codeMirror;
