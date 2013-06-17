@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link href="codemirror/codemirror.css" rel="stylesheet">
+    <title>Vizion</title>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <input type="file" id="fileSelector" name="file"/>
+          <button id="loadShaderButton" disabled>Load</button>
+          <button id="pauseButton">Pause/Unpause</button>
+          <textarea id="fragmentShader" style="width: 100%; height: 40ex;">
+varying highp vec2 uv;
+uniform sampler2D t[1];
+uniform highp vec2 duv;
+
+void skin() {
+  lowp vec3 rgb = 0.5 * texture2D(t[0], uv).rgb + 0.125 * (texture2D(t[0], uv - duv.x).rgb + texture2D(t[0], uv + duv.x).rgb + texture2D(t[0], uv - duv.y).rgb + texture2D(t[0], uv + duv.y).rgb);
+  lowp float y = dot(rgb, vec3(0.299, 0.114, 0.587));
+  lowp vec3 yuv = vec3(y, (0.492 / 0.436 / 2.0) * (rgb.b - y) + 0.5, (0.877 / 0.615 / 2.0) * (rgb.r - y) + 0.5);
+  gl_FragColor = vec4(texture2D(t[0], uv).rgb + vec3(0, 0.4, 0) * pow(smoothstep(-0.1, -0.0, -pow(4.0 * (yuv.g - 0.48), 2.0) - pow(4.0 * (yuv.z - 0.585), 2.0)), 0.05), 1);
+}
+          </textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div id="canvasContainer" class="span12" style="text-align: center;"></div>
+      </div>
+    </div>
+  </body>
+  <script src="webgl.js" type="text/javascript"></script>
+  <script src="vizion.js" type="text/javascript"></script>
+  <script src="codemirror/codemirror-compressed.js" type="text/javascript"></script>
+  <script src="codemirror/glsl.js" type="text/javascript"></script>
+  <script src="dustjs/dust-core-0.3.0.min.js" type="text/javascript"></script>
+  <script src="dustjs-templates/codemirror.js" type="text/javascript"></script>
+  <script type="text/javascript">
+  var vizion = new Vizion();
+
+  var video = vizion.createVideoElement(320, 240);
+  vizion.getVideoURL(function(url) {
+    video.src = url;
+  }, Vizion.logError);
+
+  var canvas = vizion.addCanvasElement("canvasContainer", video.width * 4, video.height * 6);
+  
+  // Get A WebGL context
+  var gl = WebGL.getGL(canvas);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.disable(gl.DEPTH_TEST);
+  gl.depthMask(false);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+  var stages = [];
+  var videoTexture = new VideoTexture(gl, video);
+  stages.push(new Stage(gl, videoTexture));
+  stages.push(new Stage(gl, stages[stages.length - 1], "skin"));
+
+  // setup GLSL program
+  var codeMirror;
+  function updateShaders() {
+    var rowToLogs = {};
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      try {
+        stages[stageIdx].setFragmentText(codeMirror.getValue());
+      } catch (e) {
+        if ((typeof (e) == "object") && (e instanceof ShaderCompileException)) {
+          for (var logIndex = 0; logIndex < e.logs.length; logIndex++) {
+            var log = e.logs[logIndex];
+            if (rowToLogs[log.row] == null) {
+              rowToLogs[log.row] = [];
+            }
+            var rowLogs = rowToLogs[log.row];
+            for (var rowLogIndex = 0; rowLogIndex < rowLogs.length; rowLogIndex++) {
+              if ((rowLogs[rowLogIndex].type == log.type) &&
+                  (rowLogs[rowLogIndex].column == log.column) &&
+                  (rowLogs[rowLogIndex].message == log.message)) {
+                log = null;
+                break;
+              }
+            }
+            if (log) {
+              rowToLogs[log.row].push(log);
+            }
+          }
+        } else {
+          throw e;
+        }
+      }
+    }
+    codeMirror.operation(function() {
+      for (var lineIndex = 0; lineIndex < codeMirror.lineCount(); lineIndex++) {
+        codeMirror.clearMarker(lineIndex);
+      }
+      for (var row in rowToLogs) {
+        dust.render("marker", {logs: rowToLogs[row]}, function(err, out) {if (err) {console.error(err);} codeMirror.setMarker(row - 1, out);});
+      }
+    });
+  }
+  function paceFunction(func, pace) {
+    var timeout = null;
+    return function() {
+      if (timeout != null) {
+        clearTimeout(timeout);
+      }
+      var otherThis = this;
+      timeout = setTimeout(function() {
+        func.apply(otherThis);
+        timeout = null;
+      }, pace);
+    }
+  }
+  codeMirror = CodeMirror.fromTextArea(document.getElementById("fragmentShader"), {mode: "x-shader/x-fragment", lineNumbers: true, matchBrackets: true, onChange: paceFunction(updateShaders, 500)});
+  updateShaders();
+
+  // Load files
+  var fileSelector = document.getElementById("fileSelector");
+  var loadShaderButton = document.getElementById("loadShaderButton");
+  fileSelector.addEventListener('change', function() {
+    var disabled = (fileSelector.files.length == 0);
+    loadShaderButton.disabled = disabled;
+  }, false);
+  loadShaderButton.onclick = function() {
+    var file = fileSelector.files[0];
+    var reader = new FileReader();
+    reader.onload = function() {
+      codeMirror.setValue(reader.result);
+    };
+    reader.readAsText(file);
+  }
+
+  var pauseButton = document.getElementById("pauseButton");
+  pauseButton.onclick = function() {
+    if (video.paused) {
+      video.play();
+    } else {
+      video.pause();
+    }
+  }
+
+  function render() {
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      stages[stageIdx].update();
+    }
+
+    var visibleStageIdx = 0;
+    for (var stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+      if (!stages[stageIdx].isHidden()) {
+        stages[stageIdx].display(video.width * (visibleStageIdx % 4), video.height * Math.floor(visibleStageIdx / 4), video.width, video.height);
+        visibleStageIdx++;
+      }
+    }
+
+    WebGL.setFrameCallback(render, canvas);
+  }
+
+  window.onload = render;
+  
+  </script>
+</html>
